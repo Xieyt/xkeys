@@ -7,7 +7,7 @@ import Foundation
 // Not a test target, and not by preference. This machine has Command Line
 // Tools and no Xcode, which ships neither XCTest nor swift-testing, so
 // `swift test` cannot run here at all. These are compiled together with the
-// sources they check — see `just test` — so they run with nothing installed.
+// sources they check - see `just test` - so they run with nothing installed.
 //
 // Nothing here touches the driver, device seizure, event taps or
 // permissions. None of that is observable from a separate process, and a

@@ -5,7 +5,7 @@
 **xkeys** is a dependency-free macOS menu-bar agent (`LSUIElement`, bundle `com.xieyt.xkeys`) that does three things:
 
 1. **Applies key swaps at the HID driver level** via `/usr/bin/hidutil`, declared in `~/.config/xkeys/config.json`, and keeps them applied (the driver list does not survive reboot or a keyboard reconnect).
-2. **Seizes external keyboards** over IOKit and replays their keystrokes as CGEvents, because on macOS 26+ a `CGEventTap` receives *no* events from external keyboards — every tap-based program on the machine is blind to them.
+2. **Seizes external keyboards** over IOKit and replays their keystrokes as CGEvents, because on macOS 26+ a `CGEventTap` receives *no* events from external keyboards - every tap-based program on the machine is blind to them.
 3. **Paints real modifier flags onto keystrokes while a trigger key is held** (the "chord"), so apps that are not the window manager can bind the trigger at all.
 
 **It does not synthesize a Hyper key by intercepting a chord.** Manufacturing modifiers on the key itself puts them downstream of anything that listens earlier; the chord instead paints flags onto the *following* keys, after an earlier listener has had its pick. See Decisions.
@@ -14,7 +14,7 @@ macOS 13+. No third-party dependencies.
 
 ## Architecture & Data Flow
 
-Everything runs in one process on the **main run loop**. That is why there is no locking anywhere — stated at `Sources/xkeys/Chord.swift:5-7` and `Sources/xkeys/KeyboardMonitor.swift:12`.
+Everything runs in one process on the **main run loop**. That is why there is no locking anywhere - stated at `Sources/xkeys/Chord.swift:5-7` and `Sources/xkeys/KeyboardMonitor.swift:12`.
 
 ### Three input layers, from lowest to highest
 
@@ -26,7 +26,7 @@ Everything runs in one process on the **main run loop**. That is why there is no
 
 ### Why the chord tap sits at the session stage
 
-A window manager that taps the **HID** stage sits one step earlier and **deletes the keystrokes it binds**. By the time the chord tap runs, those are already gone — so its bindings keep matching bare keys and nothing fires twice (`Chord.swift:26-30`).
+A window manager that taps the **HID** stage sits one step earlier and **deletes the keystrokes it binds**. By the time the chord tap runs, those are already gone - so its bindings keep matching bare keys and nothing fires twice (`Chord.swift:26-30`).
 
 A session-stage tap is always downstream of an HID-stage tap, **regardless of start order**. Creation order only decides precedence *within* one stage, which is why no restart ordering between the two apps is needed.
 
@@ -34,7 +34,7 @@ A session-stage tap is always downstream of an HID-stage tap, **regardless of st
 
 An HID-stage listener deletes the trigger's own keypress before any session tap sees it. So `chordTriggerHeld` is set from the **HID device** instead (`KeyboardMonitor.swift:196-198` external, `:233` built-in), which sits below every event tap.
 
-The device reports the **physical** key — `LeftCommand`, usage `0xE3` — not the `F20` it is swapped to, because the driver swap sits above that layer. **Measured**, not assumed (`/tmp/chordprobe/hw.swift` → `out4.txt`). This is why `chord.when` names the key your finger presses.
+The device reports the **physical** key - `LeftCommand`, usage `0xE3` - not the `F20` it is swapped to, because the driver swap sits above that layer. **Measured**, not assumed (`/tmp/chordprobe/hw.swift` → `out4.txt`). This is why `chord.when` names the key your finger presses.
 
 ### Startup order is load-bearing (`XKeysApp.swift:49-128`)
 
@@ -49,7 +49,7 @@ The device reports the **physical** key — `LeftCommand`, usage `0xE3` — not 
 8. delegate install + explicit applicationDidFinishLaunching
 ```
 
-Each ordering constraint encodes a real past bug — see **Gotchas** below. Do not reorder without reading the comments.
+Each ordering constraint encodes a real past bug - see **Gotchas** below. Do not reorder without reading the comments.
 
 ### Data flow and types
 
@@ -67,17 +67,17 @@ Each ordering constraint encodes a real past bug — see **Gotchas** below. Do n
 
 ### Two keyboard paths
 
-- **Built-in** (`kIOHIDBuiltInKey`, or transport `SPI`/`BuiltIn` — `KeyboardMonitor.swift:102-115`): driver swap only. If a chord is configured, a **passive, non-seizing** input callback is registered that reads *only* whether the trigger is down and injects nothing.
-- **External**: `IOHIDDeviceOpen(kIOHIDOptionsTypeSeizeDevice)`. On success, register the input callback and replay. **On failure, skip the device entirely** — never register a callback on an unseized device, or input doubles. Keyboards commonly expose 2+ HID interfaces; the extras fail with `kIOReturnExclusiveAccess` and are correctly skipped.
+- **Built-in** (`kIOHIDBuiltInKey`, or transport `SPI`/`BuiltIn` - `KeyboardMonitor.swift:102-115`): driver swap only. If a chord is configured, a **passive, non-seizing** input callback is registered that reads *only* whether the trigger is down and injects nothing.
+- **External**: `IOHIDDeviceOpen(kIOHIDOptionsTypeSeizeDevice)`. On success, register the input callback and replay. **On failure, skip the device entirely** - never register a callback on an unseized device, or input doubles. Keyboards commonly expose 2+ HID interfaces; the extras fail with `kIOReturnExclusiveAccess` and are correctly skipped.
 - Replayed events are stamped with `CGEventField(43) = 0x584B_4559` (`"XKEY"`) so replay cannot be mistaken for real input (`Constants.swift:22-26`).
-- Seizure handles **keyboard page 0x07 only**. The consumer page (`0x0C` — volume, brightness, play/pause) is not replayed, but that does **not** kill media keys: on the keyboards measured so far the consumer collection lives on an interface seizure *fails* on, which is then skipped, so it keeps delivering normally. Measured on a GK61 and the internal keyboard — 291 presses, nothing suppressed. Do not "fix" this without a keyboard that actually reproduces a loss.
+- Seizure handles **keyboard page 0x07 only**. The consumer page (`0x0C` - volume, brightness, play/pause) is not replayed, but that does **not** kill media keys: on the keyboards measured so far the consumer collection lives on an interface seizure *fails* on, which is then skipped, so it keeps delivering normally. Measured on a GK61 and the internal keyboard - 291 presses, nothing suppressed. Do not "fix" this without a keyboard that actually reproduces a loss.
 
 ## Key Directories
 
 | Path | Purpose |
 |---|---|
 | `Sources/xkeys/` | All 12 Swift files. The only source directory. |
-| `.github/workflows/` | Tag-triggered release build. Untested — verify before relying on a `v*` tag. |
+| `.github/workflows/` | Tag-triggered release build. Untested - verify before relying on a `v*` tag. |
 | `/tmp/chordprobe/` | Throwaway verification harness from the chord work. Not tracked; recipe preserved below. |
 
 ## Development Commands
@@ -92,7 +92,7 @@ just status         # pid, signing Authority, live swaps, chord config, TCC gran
 just restart        # pkill + open
 just stop
 just uninstall      # `xkeys --uninstall` (removes only OUR swaps) + stop + rm bundle
-just reset-permissions   # tccutil reset Accessibility + ListenEvent — only when changing signing identity
+just reset-permissions   # tccutil reset Accessibility + ListenEvent - only when changing signing identity
 just open-permissions    # opens both Privacy panes
 just debug-on / debug-off / log / log-dump
 just fix-capslock   # LAST RESORT: wipes EVERY swap on the machine, including other tools'
@@ -130,7 +130,7 @@ Any other non-empty argument → error + usage, `exit 2`.
 
 ### C callbacks cannot capture context
 
-`CGEventTap` and `IOHIDManager` callbacks are **C function pointers**. Swift closures that capture — including closures that merely call a static method on an enum — will not compile as one. Two sanctioned patterns:
+`CGEventTap` and `IOHIDManager` callbacks are **C function pointers**. Swift closures that capture - including closures that merely call a static method on an enum - will not compile as one. Two sanctioned patterns:
 
 1. **`nonisolated(unsafe)` file-scope globals** + a top-level `private func` callback. Used by `Chord.swift` (`chordTriggerUsage`, `chordTriggerHeld`, `chordFlags`, `chordHiddenKeyCode`) and `KeyboardMonitor.swift` (`activeSwaps`, `currentModifierFlags`, `connectedDevices`, …).
 2. **Box state through `userInfo`** with `Unmanaged.passRetained`. Used only by `Commands.watch` (`WatchContext`, `Commands.swift:87-100`).
@@ -139,13 +139,13 @@ Safe without locks **only** because every callback runs on the main run loop. If
 
 ### Ownership of global machine state
 
-`UserKeyMapping` is one array shared by every tool on the machine. All access is **read-modify-write, keyed by source usage**: an entry whose source matches one of our declared swaps is ours to replace; everything else is left exactly as found (`HIDMapping.swift:22-52`). **Never write the list wholesale.** hidutil returns an old-style OpenStep plist with string values, not JSON — parse via `PropertyListSerialization`, and accept both `NSNumber` and `String`.
+`UserKeyMapping` is one array shared by every tool on the machine. All access is **read-modify-write, keyed by source usage**: an entry whose source matches one of our declared swaps is ours to replace; everything else is left exactly as found (`HIDMapping.swift:22-52`). **Never write the list wholesale.** hidutil returns an old-style OpenStep plist with string values, not JSON - parse via `PropertyListSerialization`, and accept both `NSNumber` and `String`.
 
 Value packing: page `0x07` in the high 32 bits, so usage `0x39` → `0x700000039` (`KeyNames.swift:81-85`).
 
 ### Error handling: degrade, never fail closed
 
-`Config.load()` returns `(config, problems)` and never throws. An unknown key name, a duplicate source, or a malformed chord becomes a string in `problems`, surfaced in the menu and in `xkeys keys`. **A malformed chord disables the chord alone** — the swaps that keep your Escape key working still load (`Config.swift:128-130`). Duplicate `from` keeps the first.
+`Config.load()` returns `(config, problems)` and never throws. An unknown key name, a duplicate source, or a malformed chord becomes a string in `problems`, surfaced in the menu and in `xkeys keys`. **A malformed chord disables the chord alone** - the swaps that keep your Escape key working still load (`Config.swift:128-130`). Duplicate `from` keeps the first.
 
 ### Menu state is pushed, not pulled
 
@@ -157,7 +157,7 @@ stderr goes nowhere for an `open`-launched `LSUIElement`. Logs are written to `/
 
 ### Deliberate non-features
 
-Flat one-to-one swaps and one chord. **No layers, no per-app rules, no tap-versus-hold, no conditions.** "Anything beyond a flat swap and one chord is Karabiner's job" (`Config.swift:56-58`). Zero third-party dependencies — JSON over TOML for exactly this reason.
+Flat one-to-one swaps and one chord. **No layers, no per-app rules, no tap-versus-hold, no conditions.** "Anything beyond a flat swap and one chord is Karabiner's job" (`Config.swift:56-58`). Zero third-party dependencies - JSON over TOML for exactly this reason.
 
 ## Important Files
 
@@ -203,21 +203,21 @@ Flat one-to-one swaps and one chord. **No layers, no per-app rules, no tap-versu
 | layer | mechanism |
 |---|---|
 | Driver swap | `hidutil property --matching '{"Product":"<exact name>"}' --set`. Unscoped rules are written with no filter, so they land on every keyboard; a keyboard with any scoped rule also gets its own list written. |
-| Seized external keyboard | `swapsByDevice` — the software re-swap, per device. The driver write is belt-and-braces there; this is what actually decides the key. |
-| Chord trigger | `chordIndices(forUsage:product:)` — the watch knows which device the press came from. |
+| Seized external keyboard | `swapsByDevice` - the software re-swap, per device. The driver write is belt-and-braces there; this is what actually decides the key. |
+| Chord trigger | `chordIndices(forUsage:product:)` - the watch knows which device the press came from. |
 | `hide` | **Cannot be scoped.** By the session-tap stage the event carries a keycode and no device. A trigger hidden for one keyboard is hidden for all, which is what you want anyway. |
 
-A matched `hidutil --get` prints a table with one row per matching HID interface, each carrying its own list — unlike an unmatched read, which prints one bare list. `HIDMapping.entries(fromPropertyList:)` handles both by pulling every balanced `( … )` block and merging by source key.
+A matched `hidutil --get` prints a table with one row per matching HID interface, each carrying its own list - unlike an unmatched read, which prints one bare list. `HIDMapping.entries(fromPropertyList:)` handles both by pulling every balanced `( … )` block and merging by source key.
 
 ### Output contracts (parsed by `just status`)
 
-`xkeys keys` emits these headings in order — changing them breaks `just status`:
+`xkeys keys` emits these headings in order - changing them breaks `just status`:
 
 ```
 Swaps in effect
 Keyboards attached
 Chords for other apps
-Safe swap targets — no Apple keyboard has ever had these keys
+Safe swap targets - no Apple keyboard has ever had these keys
 Config problems           (only when problems exist)
 ```
 
@@ -228,26 +228,26 @@ Config problems           (only when problems exist)
 - **Signing**: a stable local identity named by the justfile's `signing_cert` variable, held in `/Library/Keychains/System.keychain` and created by `just setup-signing-cert`.
   - A stable identity is what lets the TCC grants survive a rebuild. Ad-hoc (`-s -`) changes identity every build → re-prompt every time, **and worse**: ad-hoc has produced grants that TCC.db showed as present while `AXIsProcessTrustedWithOptions` still failed at runtime.
 - **Two TCC grants are required, and they are separate**:
-  - `Accessibility` — the chord's session tap, and `xkeys watch`.
-  - `ListenEvent` (Input Monitoring) — `IOHIDManagerOpen`, i.e. the Keyboards menu and all external-keyboard support. Opening the manager cold is denied **without prompting**, which is why `IOHIDRequestAccess` is called first.
-- **The driver swap list has exactly one writer.** `UserKeyMapping` is machine-global. If anything else on the system writes it — a Nix `system.keyboard.*` option, another remapper — the two fight and the loser is silent. Keep xkeys the only writer. On a config-managed machine a generated `~/.config/xkeys/config.json` is overwritten on rebuild, so hand edits do not survive.
+  - `Accessibility` - the chord's session tap, and `xkeys watch`.
+  - `ListenEvent` (Input Monitoring) - `IOHIDManagerOpen`, i.e. the Keyboards menu and all external-keyboard support. Opening the manager cold is denied **without prompting**, which is why `IOHIDRequestAccess` is called first.
+- **The driver swap list has exactly one writer.** `UserKeyMapping` is machine-global. If anything else on the system writes it - a Nix `system.keyboard.*` option, another remapper - the two fight and the loser is silent. Keep xkeys the only writer. On a config-managed machine a generated `~/.config/xkeys/config.json` is overwritten on rebuild, so hand edits do not survive.
 
 ## Testing & QA
 
-### `just test` — pure-logic checks, and why they are not a test target
+### `just test` - pure-logic checks, and why they are not a test target
 
 `Checks/main.swift` holds ~90 assertions over the config parser, the hidutil property-list parser, and the key-name/keycode tables. `just test` compiles it together with the six source files it covers and runs it. It needs nothing installed and takes about ten seconds.
 
-**There is no `Tests/` directory and no test target, and that is not a preference.** This machine has Command Line Tools and no Xcode, which ships neither `XCTest` nor `Testing` — `swift test` cannot run here with either framework. A suite that cannot execute on the machine it guards is worse than none. If Xcode is ever installed, converting `Checks/main.swift` to a real target is mechanical.
+**There is no `Tests/` directory and no test target, and that is not a preference.** This machine has Command Line Tools and no Xcode, which ships neither `XCTest` nor `Testing` - `swift test` cannot run here with either framework. A suite that cannot execute on the machine it guards is worse than none. If Xcode is ever installed, converting `Checks/main.swift` to a real target is mechanical.
 
 **Nothing beyond pure logic is checked, deliberately.** Driver state, device seizure and event taps are not observable from a separate process. Do not add assertions that pretend otherwise.
 
 ### How the rest is verified
 
-1. `xkeys doctor` — process, signature, both permissions, config, live-versus-declared swaps, chords, each failure naming its cost and fix.
-2. `just status` — the same ground read straight from `hidutil` and `TCC.db`.
-3. `xkeys watch` — name keys as you press them, with what the system received, and the flags a chord painted on.
-4. **A signed throwaway probe bundle** — the only way to observe tap/hotkey/HID behaviour. Recipe below.
+1. `xkeys doctor` - process, signature, both permissions, config, live-versus-declared swaps, chords, each failure naming its cost and fix.
+2. `just status` - the same ground read straight from `hidutil` and `TCC.db`.
+3. `xkeys watch` - name keys as you press them, with what the system received, and the flags a chord painted on.
+4. **A signed throwaway probe bundle** - the only way to observe tap/hotkey/HID behaviour. Recipe below.
 
 ### The probe recipe (and its two traps)
 
@@ -270,7 +270,7 @@ cat > /tmp/probe/P.app/Contents/Info.plist <<'EOF'
 </dict></plist>
 EOF
 
-# 2. The probe must append to a pre-existing file — FileHandle(forWritingAtPath:)
+# 2. The probe must append to a pre-existing file - FileHandle(forWritingAtPath:)
 #    silently drops everything if the file does not exist.
 touch /tmp/probe/out.txt
 
@@ -290,9 +290,9 @@ cat /tmp/probe/out.txt
 
 Three probe shapes proved useful:
 
-- **Hardware watch** — passive `IOHIDManager` (GenericDesktop/Keyboard match, **no seize**) logging raw usages. Answers "what does the device actually report?". Proved the passive read sees `0xE3` (pre-swap `LeftCommand`), not `0x6F` (`F20`).
-- **Observer** — `NSEvent.addGlobalMonitorForEvents(matching: [.keyDown])` logging modifier flags per key. Answers "what does an ordinary app receive after every tap?". Filter to 1–2 keycodes and timestamp each line, or normal typing drowns the signal.
-- **Hotkey probe** — `RegisterEventHotKey` + a session tap stamping flags. Answers "does an app's shortcut actually fire?". Requires real keypresses.
+- **Hardware watch** - passive `IOHIDManager` (GenericDesktop/Keyboard match, **no seize**) logging raw usages. Answers "what does the device actually report?". Proved the passive read sees `0xE3` (pre-swap `LeftCommand`), not `0x6F` (`F20`).
+- **Observer** - `NSEvent.addGlobalMonitorForEvents(matching: [.keyDown])` logging modifier flags per key. Answers "what does an ordinary app receive after every tap?". Filter to 1–2 keycodes and timestamp each line, or normal typing drowns the signal.
+- **Hotkey probe** - `RegisterEventHotKey` + a session tap stamping flags. Answers "does an app's shortcut actually fire?". Requires real keypresses.
 
 ### The verification that shipped the chord
 
@@ -318,17 +318,17 @@ Each of these is a bug that already happened. The source comments carry the deta
 
 - **`NSApplication.delegate` is weak.** A delegate held only in a `main()` local is freed by ARC in release builds → nil delegate → no menu bar item. Keep the file-scope static (`XKeysApp.swift:5-12`).
 - **Create `NSApplication` before anything spins the run loop.** `Accessibility.ensureAccessibility()` runs the run loop; if it runs first, the launch Apple Event is dequeued with nobody listening and `applicationDidFinishLaunching` never fires (`:49-60`).
-- **`applicationDidFinishLaunching` is called explicitly** and guarded by `setupComplete`. Failure mode — "runs perfectly, no icon, no menu" — is very hard to recognise.
+- **`applicationDidFinishLaunching` is called explicitly** and guarded by `setupComplete`. Failure mode - "runs perfectly, no icon, no menu" - is very hard to recognise.
 - **`statusItem.autosaveName = "xkeys"` is required.** Without it macOS assigns a slot from the shared `Item-N` pool, and a stale `NSStatusItem Visible Item-N = 0` in Control Center's prefs makes the icon silently invisible.
 - **Apply swaps before the Accessibility wait.** `hidutil` needs no permission; an unanswered dialog otherwise costs you your Escape key for as long as it sits there.
 - **`ChordTap.start` must precede `KeyboardMonitor.start`.** The passive trigger reader is registered only when `chordTriggerUsage != nil`.
-- **Poll with `CFRunLoopRunInMode`, never `Thread.sleep`** — sleeping the main thread makes macOS show "application not responding".
-- **Launch path matters.** `open` from a terminal or an automated session has been observed to leave the app running but stuck before creating its `NSStatusItem` — no crash, no error, no icon. A genuine Finder double-click works.
+- **Poll with `CFRunLoopRunInMode`, never `Thread.sleep`** - sleeping the main thread makes macOS show "application not responding".
+- **Launch path matters.** `open` from a terminal or an automated session has been observed to leave the app running but stuck before creating its `NSStatusItem` - no crash, no error, no icon. A genuine Finder double-click works.
 
 ### Keyboard and driver
 
 - **Never replace `UserKeyMapping` wholesale.** The previous version did it on quit and erased swaps belonging to other tools.
-- **Re-apply swaps on every keyboard connect** — a new keyboard resets the driver's swap list.
+- **Re-apply swaps on every keyboard connect** - a new keyboard resets the driver's swap list.
 - **Seize-failure ⇒ skip the device.** Registering an input callback on an unseized device doubles every keystroke.
 - **Read trigger state before applying the software swap**, from the usage the hardware reports, so external and built-in keyboards behave identically.
 - **Modifier state is per device.** One shared value let a Shift held on one external keyboard colour keys typed on another, and let unplugging either keyboard clear a modifier the other was still holding.
@@ -344,18 +344,18 @@ Each of these is a bug that already happened. The source comments carry the deta
 
 ### Repo hygiene
 
-- **`.github/workflows/release.yml` is unverified.** It stamps the version from the tag, builds universal, ad-hoc signs, and publishes a zip. No `v*` tag has been pushed since it was rewritten — check it before trusting a release.
+- **`.github/workflows/release.yml` is unverified.** It stamps the version from the tag, builds universal, ad-hoc signs, and publishes a zip. No `v*` tag has been pushed since it was rewritten - check it before trusting a release.
 - **Docs drift fast here.** `README.md` and this file both describe behaviour that only exists in code; re-read `Chord.swift` and `justfile` before trusting either.
 - **`just fix-capslock` nukes every swap on the machine**, including other tools'. `xkeys --uninstall` is the surgical version.
 - `just dev-install` requires a prior `just install`.
 
-## Decisions (binding — do not re-litigate)
+## Decisions (binding - do not re-litigate)
 
 From the chord design work, 2026-10-16.
 
-1. **The four modifiers stay.** Dropping them and binding the swapped-to key (`F20`) directly was proposed and rejected. A shortcut recorder calls `RegisterEventHotKey`, which takes a modifier bitmask plus one keycode and nothing else — no app can express "F20 held plus U". Without manufactured flags the feature is unachievable.
+1. **The four modifiers stay.** Dropping them and binding the swapped-to key (`F20`) directly was proposed and rejected. A shortcut recorder calls `RegisterEventHotKey`, which takes a modifier bitmask plus one keycode and nothing else - no app can express "F20 held plus U". Without manufactured flags the feature is unachievable.
 2. **xkeys hides the trigger, not the window manager.** "Only swallow the trigger when a binding uses it" was rejected: at the moment the trigger goes down, the second key does not exist yet, so there is nothing to test.
 3. **The chord is config-driven.** Any key may be the trigger. Hardcoding Left Command is the pattern the previous rewrite removed.
 4. **`chord.when` names the key your finger presses.** The hardware watch reports `LeftCommand` (`0xE3`); `"when": "F20"` would name a key xkeys never observes and would break silently if the swap were removed.
-5. **Late-stage stamping is proven, not assumed** — 8 real keypresses, 8 hotkey fires. Synthetic events gave two false negatives and were discarded.
+5. **Late-stage stamping is proven, not assumed** - 8 real keypresses, 8 hotkey fires. Synthetic events gave two false negatives and were discarded.
 6. **The window manager is out of scope from this repo.** xkeys must assume an earlier listener may delete the trigger press entirely, which is why trigger state comes from the HID device, not the event stream.

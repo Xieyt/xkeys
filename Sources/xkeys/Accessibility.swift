@@ -6,7 +6,7 @@ enum Accessibility {
     /// How long to wait for the grant before telling the user something is
     /// wrong. Waiting silently forever is tempting and wrong: for an
     /// LSUIElement agent it means an invisible process that appears to have
-    /// launched fine and simply does nothing — the single most confusing
+    /// launched fine and simply does nothing - the single most confusing
     /// failure this app has.
     private static let nagInterval: TimeInterval = 20
 
@@ -57,7 +57,7 @@ enum Accessibility {
             xkeys cannot remap keys until it is enabled under
             Privacy & Security › Accessibility.
 
-            It will start working the moment you enable it — no relaunch needed.
+            It will start working the moment you enable it - no relaunch needed.
             """
         alert.alertStyle = .warning
         alert.addButton(withTitle: "Open Settings")

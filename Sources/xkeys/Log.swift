@@ -3,7 +3,7 @@ import Foundation
 /// Gated debug logging.
 ///
 /// This app is an `LSUIElement` agent normally started via `open`, so anything
-/// written to stderr goes nowhere — there is no terminal attached and launchd
+/// written to stderr goes nowhere - there is no terminal attached and launchd
 /// is not the parent. `os_log`/`NSLog` output also proved unreliable to read
 /// back for this process. So debug output goes to a plain file instead.
 ///
@@ -35,7 +35,7 @@ enum Log {
         write(message())
     }
 
-    /// Always written, regardless of the flag — for startup state and failures
+    /// Always written, regardless of the flag - for startup state and failures
     /// a user would need to diagnose anything at all.
     static func info(_ message: @autoclosure () -> String) {
         write(message())

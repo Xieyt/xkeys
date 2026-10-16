@@ -46,8 +46,8 @@ func chordActiveFlags() -> CGEventFlags {
 /// Why trigger state is NOT read from the event stream: that earlier listener
 /// deletes the trigger's own press, so it never reaches this stage.
 /// `KeyboardMonitor` reads it off the keyboard device instead, which is below
-/// every event tap. That watch reports the key as the hardware sends it —
-/// `LeftCommand`, not the `F20` it is swapped to — which is why the config
+/// every event tap. That watch reports the key as the hardware sends it:
+/// `LeftCommand`, not the `F20` it is swapped to - which is why the config
 /// names the key your finger presses.
 enum ChordTap {
     nonisolated(unsafe) static var active: [Chord] = []
@@ -73,7 +73,7 @@ enum ChordTap {
         //
         // Hiding cannot be scoped to one keyboard: by this stage the event
         // carries no device, only a keycode. A trigger hidden for one
-        // keyboard is therefore hidden for all — which is what you want
+        // keyboard is therefore hidden for all - which is what you want
         // anyway, since a bare trigger press should type nothing anywhere.
         chordHiddenKeyCodes = Set(chords.compactMap { chord -> UInt16? in
             guard chord.hide else { return nil }

@@ -7,7 +7,7 @@ import Foundation
 /// `NSApplication.delegate` is a WEAK reference. Holding the delegate only in a
 /// local inside `main()` lets ARC deallocate it immediately after the
 /// assignment in optimized (`-c release`) builds, since the local is never read
-/// again — `app.run()` then runs with a nil delegate and
+/// again - `app.run()` then runs with a nil delegate and
 /// `applicationDidFinishLaunching` is never called, so the menu bar item is
 /// never created. A static keeps it alive for the process lifetime.
 nonisolated(unsafe) private var appDelegate: AppDelegate?
@@ -63,7 +63,7 @@ struct XKeysApp {
         // running the run loop before that point (which
         // Accessibility.ensureAccessibility does while waiting for the grant)
         // lets the launch event be dequeued and dropped with nobody listening
-        // — after which the notification never arrives, the delegate's setup
+        // - after which the notification never arrives, the delegate's setup
         // never runs, and the app has no menu bar item at all.
         let app = NSApplication.shared
         app.setActivationPolicy(.accessory)
@@ -83,7 +83,7 @@ struct XKeysApp {
         //
         // `hidutil` needs no permission at all. Waiting for the Accessibility
         // grant before applying them means a revoked or not-yet-granted
-        // permission silently costs you the swaps too — typically your
+        // permission silently costs you the swaps too - typically your
         // Escape key and your chord trigger, for as long as the dialog sits
         // unanswered.
         let (config, problems) = Config.load()
@@ -108,7 +108,7 @@ struct XKeysApp {
         // 7. Take only our own entries back out on the way down.
         //
         // The previous version replaced the whole swap list with an empty one
-        // here, which erased entries it had never created — so quitting wiped
+        // here, which erased entries it had never created - so quitting wiped
         // swaps belonging to other tools, and killing the app left the
         // keyboard in a different state than it found it.
         signal(SIGINT) { _ in
@@ -139,7 +139,7 @@ struct XKeysApp {
 
     private static func usage() {
         print("""
-        xkeys \(Constants.displayVersion) — keeps your key swaps applied
+        xkeys \(Constants.displayVersion) - keeps your key swaps applied
 
         usage:
           xkeys                 run as a menu bar agent
@@ -354,7 +354,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             + (KeyboardMonitor.openFailure.map { String(format: "0x%08X", $0) } ?? "none"))
 
         if devices.isEmpty {
-            // An empty list is almost never "you have no keyboard" — it means
+            // An empty list is almost never "you have no keyboard" - it means
             // IOHIDManagerOpen was refused for lack of Input Monitoring, a
             // separate grant from Accessibility that macOS does not prompt an
             // LSUIElement agent for.

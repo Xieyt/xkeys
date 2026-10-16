@@ -95,7 +95,7 @@ enum KeyNames {
     /// Asking the hardware does not work: a MacBook's keyboard descriptor
     /// claims all 228 usages including F13-F20 and the Japanese language keys,
     /// so the device cannot tell you what it is physically able to send. This
-    /// table is the honest answer instead — if Apple never put the key on a
+    /// table is the honest answer instead - if Apple never put the key on a
     /// keyboard, nothing can press it, so nothing can be bound to it.
     ///
     /// F13-F19 are deliberately absent: full-size Apple keyboards have them.

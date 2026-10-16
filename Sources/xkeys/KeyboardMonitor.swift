@@ -39,15 +39,15 @@ struct KeyboardInfo {
 /// system.
 ///
 /// On macOS 26+, a CGEventTap no longer receives events from external
-/// keyboards at all. Every program that watches the keyboard — including the
-/// window manager — is blind to them. This module seizes external keyboards
+/// keyboards at all. Every program that watches the keyboard - including the
+/// window manager - is blind to them. This module seizes external keyboards
 /// directly and replays their keystrokes as ordinary events, which is the only
 /// reason those programs see them. Built-in keyboards need none of this.
 enum KeyboardMonitor {
     private nonisolated(unsafe) static var manager: IOHIDManager?
     /// Connected keyboards for menu display. Updated on connect/disconnect.
     nonisolated(unsafe) static var connectedDevices: [KeyboardInfo] = []
-    /// Non-nil when IOHIDManagerOpen failed — almost always a missing Input
+    /// Non-nil when IOHIDManagerOpen failed - almost always a missing Input
     /// Monitoring grant. Surfaced in the Keyboards menu.
     nonisolated(unsafe) static var openFailure: IOReturn?
     /// Invoked after `connectedDevices` changes so the menu can rebuild. The
@@ -63,7 +63,7 @@ enum KeyboardMonitor {
 
         // Ask for Input Monitoring before opening the manager. Calling
         // IOHIDManagerOpen cold is denied WITHOUT prompting when the grant is
-        // missing — no dialog, no error, just an empty Keyboards menu and no
+        // missing - no dialog, no error, just an empty Keyboards menu and no
         // external-keyboard support. IOHIDRequestAccess is the Input
         // Monitoring equivalent of AXIsProcessTrustedWithOptions.
         let accessBefore = IOHIDCheckAccess(kIOHIDRequestTypeListenEvent)
@@ -86,7 +86,7 @@ enum KeyboardMonitor {
 
         IOHIDManagerScheduleWithRunLoop(manager, CFRunLoopGetMain(), CFRunLoopMode.defaultMode.rawValue)
         // IOHIDManagerOpen fails with kIOReturnNotPermitted (0xE00002E2)
-        // unless the app has Input Monitoring — a SEPARATE grant from
+        // unless the app has Input Monitoring - a SEPARATE grant from
         // Accessibility. When it fails no device callbacks ever fire, so the
         // Keyboards menu silently shows nothing. Record it so the menu can say
         // so.
@@ -169,7 +169,7 @@ private func deviceConnectedCallback(
     }
 
     // External keyboard: seize for exclusive access, then replay its input.
-    // Only replay devices we successfully seize — if seizure fails (e.g. a
+    // Only replay devices we successfully seize - if seizure fails (e.g. a
     // duplicate HID interface for the same physical keyboard), skip it to
     // avoid doubled input.
     let seizeResult = IOHIDDeviceOpen(device, IOOptionBits(kIOHIDOptionsTypeSeizeDevice))

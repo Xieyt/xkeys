@@ -9,7 +9,7 @@ enum Commands {
     /// List swap targets that no Apple keyboard has ever shipped.
     ///
     /// This is a fixed table, not a hardware query, and that is deliberate.
-    /// A MacBook's keyboard descriptor reports all 228 HID usages — it claims
+    /// A MacBook's keyboard descriptor reports all 228 HID usages - it claims
     /// it can send F13 through F20 and the Japanese language keys, none of
     /// which exist on the hardware. The device cannot tell you what it is
     /// physically able to press, so asking it would give a confidently wrong
@@ -61,7 +61,7 @@ enum Commands {
         }
 
         print("")
-        print("Safe swap targets — no Apple keyboard has ever had these keys")
+        print("Safe swap targets - no Apple keyboard has ever had these keys")
         var free = 0
         for group in KeyNames.safeTargets {
             let rendered = group.names.map { name -> String in
@@ -97,7 +97,7 @@ enum Commands {
         var swapTargets: [UInt32: UInt32] = [:] // destination usage -> source usage
         for swap in live { swapTargets[swap.to] = swap.from }
 
-        // macOS gives three pairs of keys the same virtual keycode — F13 and
+        // macOS gives three pairs of keys the same virtual keycode - F13 and
         // PrintScreen share 105, F14 and ScrollLock 107, F15 and Pause 113.
         // Walking the name table in dictionary order therefore named those
         // keys differently from run to run. Sorting ascending and letting the
@@ -134,7 +134,7 @@ enum Commands {
         CFRunLoopAddSource(CFRunLoopGetCurrent(), source, .commonModes)
         CGEvent.tapEnable(tap: tap, enable: true)
 
-        print("watching the keyboard — press keys, ctrl-c to stop")
+        print("watching the keyboard - press keys, ctrl-c to stop")
         if live.isEmpty {
             print("no swaps are live")
         } else {
@@ -155,7 +155,7 @@ enum Commands {
         let (config, problems) = Config.load(path: path)
 
         if problems.isEmpty {
-            print("ok — \(count(config.swaps.count, "swap")), \(count(config.chords.count, "chord"))")
+            print("ok - \(count(config.swaps.count, "swap")), \(count(config.chords.count, "chord"))")
             exit(0)
         }
 
@@ -221,7 +221,7 @@ enum Commands {
         }
 
         let (config, problems) = Config.load()
-        row("config", "\(Config.path) — \(count(config.swaps.count, "swap")), \(count(config.chords.count, "chord"))")
+        row("config", "\(Config.path) - \(count(config.swaps.count, "swap")), \(count(config.chords.count, "chord"))")
         if !problems.isEmpty {
             faults.append(("config", problems + ["fix: xkeys check \(Config.path)"]))
         }
@@ -264,7 +264,7 @@ enum Commands {
         }
 
         for swap in unplugged {
-            row("", "\(swap.description)\(swap.on.suffix) — that keyboard is not attached")
+            row("", "\(swap.description)\(swap.on.suffix) - that keyboard is not attached")
         }
 
         if config.chords.isEmpty {

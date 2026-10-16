@@ -4,7 +4,7 @@ import Foundation
 ///
 /// The swap list is a single global setting: one array that every tool on the
 /// machine writes to. The previous version of this app replaced that array
-/// wholesale on quit, which erased swaps it had never created — including the
+/// wholesale on quit, which erased swaps it had never created - including the
 /// ones declared elsewhere. Everything here is therefore read-modify-write:
 /// this app only ever adds or removes its own entries.
 ///
@@ -73,7 +73,7 @@ enum HIDMapping {
         guard let text = run(["property", "--matching", "keyboard", "--get", "Product"]) else { return [] }
         var names: [String] = []
         for line in text.split(separator: "\n").dropFirst() {
-            // "<registry id>   Product   <name>" — the name may contain spaces.
+            // "<registry id>   Product   <name>" - the name may contain spaces.
             guard let range = line.range(of: "Product") else { continue }
             let name = line[range.upperBound...].trimmingCharacters(in: .whitespaces)
             if !name.isEmpty, !names.contains(name) { names.append(name) }
@@ -97,14 +97,14 @@ enum HIDMapping {
     /// without touching the driver.
     ///
     /// Two shapes have to be read. Unmatched, hidutil prints one bare
-    /// property list. Matched, it prints a table — a header line, then one
+    /// property list. Matched, it prints a table - a header line, then one
     /// row per matching device, each row carrying its own list. Several HID
     /// interfaces of one keyboard match at once, so a matched read returns
     /// several lists; they describe the same keyboard, so the entries are
     /// merged and de-duplicated by source key.
     ///
     /// Values are an old-style (OpenStep) property list, not JSON, and come
-    /// back as strings in that format — so both NSNumber and String have to
+    /// back as strings in that format - so both NSNumber and String have to
     /// be accepted.
     static func entries(fromPropertyList text: String) -> [Entry] {
         var merged: [Entry] = []

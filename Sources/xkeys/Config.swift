@@ -4,7 +4,7 @@ import Foundation
 /// Which keyboard a rule applies to.
 ///
 /// Matching is a case-insensitive substring of the product name the device
-/// reports — `"gk61"` matches `"gk61 pro 48"` — because the laptop keyboard
+/// reports - `"gk61"` matches `"gk61 pro 48"` - because the laptop keyboard
 /// reports a vendor and product number of zero and can only be told apart by
 /// name. `nil` means every keyboard, which is what every rule meant before
 /// scoping existed.
@@ -50,7 +50,7 @@ struct Swap: Equatable {
 }
 
 /// A trigger key plus the modifiers to paint onto other keys while it is
-/// held. `when` names the key your finger presses — the hardware reports the
+/// held. `when` names the key your finger presses - the hardware reports the
 /// physical key, not what the driver swapped it to.
 struct Chord: Equatable {
     let when: UInt32 // HID usage of the physical trigger key
@@ -68,7 +68,7 @@ struct Chord: Equatable {
         self.on = on
     }
 
-    /// "Cmd+Ctrl+Opt+Shift" — derived from the flags rather than echoed back
+    /// "Cmd+Ctrl+Opt+Shift" - derived from the flags rather than echoed back
     /// from the config, so two configs that mean the same thing print the
     /// same way and the order is stable.
     var holdDescription: String { ModifierNames.describe(hold) }
@@ -226,7 +226,7 @@ struct Config {
         return (Config(swaps: swaps, chords: chords), problems)
     }
 
-    /// A malformed chord disables that chord and nothing else — the swaps are
+    /// A malformed chord disables that chord and nothing else - the swaps are
     /// what keep your Escape key working, and must not fail with it.
     private static func parseChord(
         _ entry: Document.ChordEntry,

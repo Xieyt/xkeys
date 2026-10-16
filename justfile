@@ -1,6 +1,6 @@
 app := "/Applications/xkeys.app"
 # A STABLE local code-signing identity is what lets the Accessibility and
-# Input Monitoring grants survive a rebuild — ad-hoc (`-s -`) signatures
+# Input Monitoring grants survive a rebuild - ad-hoc (`-s -`) signatures
 # change identity every build, so macOS treats each build as a new app and
 # re-prompts. Create one with `just setup-signing-cert`, or override:
 #   just signing_cert=my-identity install
@@ -49,7 +49,7 @@ dev-install: build
     #!/usr/bin/env bash
     set -euo pipefail
     if [ ! -d "{{app}}" ]; then
-      echo "!! {{app}} not present — run \`just install\` first"; exit 1
+      echo "!! {{app}} not present - run \`just install\` first"; exit 1
     fi
     pkill -x xkeys 2>/dev/null || true
     sleep 1
@@ -174,12 +174,12 @@ setup-signing-cert:
 # turn debug logging on (writes /tmp/xkeys.log)
 debug-on:
     defaults write com.xieyt.xkeys debugLogging -bool true
-    @echo "debug logging ON — restart the app (\`just restart\`), then \`just log\`"
+    @echo "debug logging ON - restart the app (\`just restart\`), then \`just log\`"
 
 # turn debug logging off
 debug-off:
     defaults write com.xieyt.xkeys debugLogging -bool false
-    @echo "debug logging OFF — restart the app to apply"
+    @echo "debug logging OFF - restart the app to apply"
 
 # tail the debug log (enable it first with debug-on)
 log:
@@ -192,7 +192,7 @@ log-dump:
     @cat /tmp/xkeys.log 2>/dev/null || echo "(no log yet)"
 
 # wipe EVERY swap on the machine, including ones xkeys does not own. Last
-# resort only — `xkeys --uninstall` removes just this app's entries.
+# resort only - `xkeys --uninstall` removes just this app's entries.
 fix-capslock:
     hidutil property --set '{"UserKeyMapping":[]}' >/dev/null
     @echo "All key swaps cleared. Run \`just restart\` to re-apply yours."
