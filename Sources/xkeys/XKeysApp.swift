@@ -264,7 +264,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         swapsMenuItem.submenu = NSMenu()
         menu.addItem(swapsMenuItem)
 
-        chordMenuItem = NSMenuItem(title: "Chord", action: nil, keyEquivalent: "")
+        chordMenuItem = NSMenuItem(title: "Chords", action: nil, keyEquivalent: "")
         chordMenuItem.submenu = NSMenu()
         menu.addItem(chordMenuItem)
 
