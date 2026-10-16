@@ -2,7 +2,7 @@
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/wordmark-dark.png">
-  <img src="assets/wordmark-light.png" width="353" alt="xkeys">
+  <img src="assets/wordmark-light.png" width="420" alt="xkeys">
 </picture>
 
 **Remap keys at the driver level on macOS, and keep them remapped.**
