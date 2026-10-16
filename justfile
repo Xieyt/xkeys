@@ -2,9 +2,16 @@ app := "/Applications/xkeys.app"
 # A STABLE local code-signing identity is what lets the Accessibility and
 # Input Monitoring grants survive a rebuild - ad-hoc (`-s -`) signatures
 # change identity every build, so macOS treats each build as a new app and
-# re-prompts. Create one with `just setup-signing-cert`, or override:
-#   just signing_cert=my-identity install
-signing_cert := "xkeys-codesign"
+# re-prompts.
+#
+# Resolved in three steps, first hit wins:
+#   1. `just signing_cert=my-identity install`
+#   2. ~/.config/xkeys/signing-identity, written by the Nix module's
+#      `programs.xkeys.signingIdentity`. This is how a machine that shares
+#      one identity across several locally built apps names it once instead
+#      of relying on everyone to remember the flag.
+#   3. xkeys-codesign, created by `just setup-signing-cert`.
+signing_cert := `cat "${XDG_CONFIG_HOME:-$HOME/.config}/xkeys/signing-identity" 2>/dev/null || echo xkeys-codesign`
 sys_keychain := "/Library/Keychains/System.keychain"
 
 # `swift build` must not see nix's SDK/toolchain env: the devShell exports

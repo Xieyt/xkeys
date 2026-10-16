@@ -124,6 +124,29 @@ in {
       default = true;
       description = "Start xkeys at login.";
     };
+
+    signingIdentity = lib.mkOption {
+      type = lib.types.nullOr lib.types.str;
+      default = null;
+      example = "shared-codesign";
+      description = ''
+        Name of the local code-signing identity `just install` should sign
+        with, written to `~/.config/xkeys/signing-identity` for the justfile
+        to read.
+
+        Nix cannot sign xkeys itself: nixpkgs has Swift 5.10 on darwin and
+        xkeys needs Swift 6, so there is no package for nix to stamp. What
+        this option does is stop you having to remember the name. Without it
+        the build looks for `xkeys-codesign`; on a machine whose identity is
+        called something else, a plain `just install` would quietly fall back
+        to an ad-hoc signature and macOS would forget the Accessibility and
+        Input Monitoring grants.
+
+        Set this when one identity is shared across several locally built
+        apps, so each repo keeps its own generic default and the machine
+        names the one it actually has.
+      '';
+    };
   };
 
   config = lib.mkIf cfg.enable {
@@ -143,6 +166,12 @@ in {
     ];
 
     xdg.configFile."xkeys/config.json".text = builtins.toJSON settings;
+
+    # Read by the justfile's `signing_cert` default, so the name is declared
+    # once here rather than typed on every install.
+    xdg.configFile."xkeys/signing-identity" = lib.mkIf (cfg.signingIdentity != null) {
+      text = cfg.signingIdentity + "\n";
+    };
 
     launchd.agents.xkeys = lib.mkIf cfg.launchAgent {
       enable = true;
