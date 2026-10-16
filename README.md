@@ -209,4 +209,4 @@ macOS 13 or later. A Swift 6 toolchain and [`just`](https://github.com/casey/jus
 
 ## Credits
 
-Inspired by [hyperkey](https://github.com/feedthejim/hyperkey) by Jimmy Lai. MIT licensed, see [LICENSE](LICENSE).
+Inspired by [hyperkey](https://github.com/feedthejim/hyperkey) by Jimmy Lai.
