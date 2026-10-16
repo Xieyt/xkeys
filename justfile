@@ -116,7 +116,10 @@ install: build
 _sign:
     #!/usr/bin/env bash
     set -euo pipefail
+    src="repo default"
+    [ -f "${XDG_CONFIG_HOME:-$HOME/.config}/xkeys/signing-identity" ] && src="~/.config/xkeys/signing-identity"
     if security find-certificate -c "{{signing_cert}}" "{{sys_keychain}}" >/dev/null 2>&1; then
+      echo "signing with: {{signing_cert}}  ($src)"
       codesign -f -s "{{signing_cert}}" --identifier com.xieyt.xkeys "{{app}}"
     else
       echo "!! '{{signing_cert}}' not in System keychain; signing ad-hoc."
