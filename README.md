@@ -54,6 +54,44 @@ Then write `~/.config/xkeys/config.json` and run `just restart`.
 
 **Why the signing step matters.** macOS attaches permission grants to a signature. An ad-hoc signature changes on every build, so every rebuild looks like a brand new app and asks for permissions again. `just setup-signing-cert` creates one stable self-signed identity, and the grants then survive rebuilds. Use your own with `just signing_cert=my-identity install`.
 
+### Nix
+
+The flake ships a dev shell and two modules. It ships no package: nixpkgs has Swift 5.10 on darwin and xkeys needs Swift 6, so nothing in nixpkgs can compile it. Install the app itself once with `just install`; the modules own everything that repeats.
+
+```nix
+{
+  inputs.xkeys.url = "github:Xieyt/xkeys";
+
+  # nix-darwin: creates one stable signing identity, so the Accessibility and
+  # Input Monitoring grants survive every rebuild.
+  darwinModules = [ xkeys.darwinModules.xkeys ];
+
+  # home-manager: owns ~/.config/xkeys/config.json and the launch agent.
+  homeModules = [ xkeys.homeManagerModules.xkeys ];
+}
+```
+
+```nix
+programs.xkeys = {
+  enable = true;
+  swaps = [
+    { from = "CapsLock"; to = "Escape"; }
+    { from = "LeftCommand"; to = "F20"; on = "Apple Internal"; }
+    { from = "LeftControl"; to = "F20"; on = "gk61"; }
+  ];
+  chords = [
+    { when = "LeftCommand"; on = "Apple Internal"; hold = [ "Command" "Control" "Option" "Shift" ]; }
+    { when = "LeftControl"; on = "gk61";           hold = [ "Command" "Control" "Option" "Shift" ]; }
+  ];
+};
+
+services.xkeys.signingIdentity = "xkeys-codesign";  # default
+```
+
+Key and modifier names are checked while nix evaluates, against the real vocabulary extracted from the source, so a typo fails `darwin-rebuild` instead of quietly disabling one swap. So does swapping the same key twice in the same scope.
+
+`nix develop` gives you `just` and, more usefully, a shell with `SDKROOT` and `DEVELOPER_DIR` cleared. A darwin dev shell normally points those at nixpkgs' Apple SDK, which the system Swift 6 compiler rejects outright.
+
 ## Configure
 
 `~/.config/xkeys/config.json`:

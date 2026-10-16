@@ -176,6 +176,11 @@ Flat one-to-one swaps and one chord. **No layers, no per-app rules, no tap-versu
 | `Sources/xkeys/Log.swift` | `/tmp/xkeys.log` writer |
 | `Sources/xkeys/UpdateChecker.swift` | GitHub releases check, 24 h cache |
 | `justfile` | **Authoritative** build/install/diagnose tooling |
+| `flake.nix` | Dev shell with the SDK env cleared, plus the two Nix modules. No package: nixpkgs Swift is 5.10, this needs 6 |
+| `nix/home-manager.nix` | `programs.xkeys` - typed swaps and chords, config file, launch agent |
+| `nix/darwin.nix` | `services.xkeys` - creates the stable signing identity at activation |
+| `nix/keys.nix` | **Generated.** The key vocabulary the Nix module validates against. `just gen-nix-keys`; `just test` fails if it drifts |
+| `Checks/names.swift` | The generator behind `nix/keys.nix` |
 | `~/.config/xkeys/config.json` | **Not in this repo.** The user's swap + chord declarations |
 
 ### Config format

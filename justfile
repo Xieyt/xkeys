@@ -43,6 +43,33 @@ test:
       Checks/main.swift \
       -o "$out"
     "$out"
+    just _gen-nix-keys /tmp/xkeys-keys.nix
+    if ! diff -q nix/keys.nix /tmp/xkeys-keys.nix >/dev/null; then
+      echo "!! nix/keys.nix is stale; run \`just gen-nix-keys\`"
+      diff nix/keys.nix /tmp/xkeys-keys.nix | head -20
+      exit 1
+    fi
+    echo "nix/keys.nix matches the source vocabulary"
+
+# regenerate the key vocabulary the Nix module validates against
+gen-nix-keys:
+    just _gen-nix-keys nix/keys.nix
+    @echo "wrote nix/keys.nix"
+
+_gen-nix-keys out:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    dir=$(mktemp -d)
+    cp Checks/names.swift "$dir/main.swift"
+    env -u SDKROOT -u DEVELOPER_DIR /usr/bin/xcrun --sdk macosx swiftc -O \
+      Sources/xkeys/KeyNames.swift \
+      Sources/xkeys/Config.swift \
+      Sources/xkeys/Log.swift \
+      Sources/xkeys/Constants.swift \
+      "$dir/main.swift" \
+      -o "$dir/gen"
+    "$dir/gen" > "{{out}}"
+    rm -rf "$dir"
 
 # build, swap the binary into the installed bundle, re-sign, relaunch
 dev-install: build
