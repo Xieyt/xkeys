@@ -1,17 +1,19 @@
 <div align="center">
 
-<img src="assets/icon-256.png" width="128" alt="xkeys icon">
+<img src="assets/icon-256.png" width="200" height="200" alt="xkeys icon">
 
-# xkeys
+<h1>xkeys</h1>
 
 **Remap keys at the driver level on macOS, and keep them remapped.**
 
-[![macOS 13+](https://img.shields.io/badge/macOS-13%2B-black?logo=apple&logoColor=white)](#requirements)
-[![Swift 6](https://img.shields.io/badge/Swift-6-F05138?logo=swift&logoColor=white)](Package.swift)
-[![No dependencies](https://img.shields.io/badge/dependencies-none-success)](Package.swift)
-[![MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+One key becomes another below every program on the machine. External keyboards keep working where `CGEventTap` has gone blind. A held key turns into a modifier chord any app can bind. Per keyboard, if you want.
 
-A menu bar agent in ~2,400 lines of Swift. No kernel extension, no virtual keyboard driver, no login shell hacks.
+![Platform](https://img.shields.io/badge/platform-macOS%2013%2B-blue?style=flat-square&logo=apple&logoColor=white)
+[![Swift](https://img.shields.io/badge/swift-6-F05138?style=flat-square&logo=swift&logoColor=white)](Package.swift)
+[![Dependencies](https://img.shields.io/badge/dependencies-none-brightgreen?style=flat-square)](Package.swift)
+[![Checks](https://img.shields.io/badge/checks-113%20passing-brightgreen?style=flat-square)](Checks/main.swift)
+[![Nix](https://img.shields.io/badge/nix-flake-5277C3?style=flat-square&logo=nixos&logoColor=white)](flake.nix)
+[![License](https://img.shields.io/badge/license-MIT-black?style=flat-square)](LICENSE)
 
 </div>
 
@@ -54,7 +56,13 @@ just install              # build, sign, install to /Applications, launch
 
 Then write `~/.config/xkeys/config.json` and run `just restart`.
 
-**Why the signing step matters.** macOS attaches permission grants to a signature. An ad-hoc signature changes on every build, so every rebuild looks like a brand new app and asks for permissions again. `just setup-signing-cert` creates one stable self-signed identity, and the grants then survive rebuilds. Use your own with `just signing_cert=my-identity install`.
+> [!IMPORTANT]
+> **Do not skip the signing step.** macOS attaches permission grants to a
+> signature. An ad-hoc signature changes on every build, so every rebuild looks
+> like a brand new app and asks for Accessibility and Input Monitoring again.
+> `just setup-signing-cert` creates one stable self-signed identity and the
+> grants then survive rebuilds. Use your own with
+> `just signing_cert=my-identity install`.
 
 ### Nix
 
@@ -193,7 +201,9 @@ swap: LeftCommand -> F20
 | Accessibility | chords, and `xkeys watch` | swaps unaffected, chords silently inactive |
 | Input Monitoring | seeing external keyboards | external keyboards invisible to other apps |
 
-Swaps are applied before either permission is checked, so a revoked grant or an unanswered dialog never costs you your Escape key.
+> [!NOTE]
+> Swaps are applied *before* either permission is checked, so a revoked grant or
+> an unanswered dialog never costs you your Escape key.
 
 `just open-permissions` opens both panes. `just reset-permissions` clears the grants, needed only after changing the signing identity.
 
@@ -241,7 +251,9 @@ Trigger state comes from layer 2, not from the event stream, because a window ma
 
 ## Not doing
 
-No layers, no per-app rules, no tap-versus-hold, no key sequences. Flat swaps and chords, scoped by keyboard, and nothing else. If you need the rest, you need Karabiner-Elements.
+No layers. No per-app rules. No tap-versus-hold. No key sequences.
+
+Flat swaps and chords, scoped by keyboard, and nothing else. If you need the rest, you need [Karabiner-Elements](https://karabiner-elements.pqrs.org).
 
 ## Requirements
 
