@@ -178,6 +178,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         super.init()
     }
 
+    /// The two-key mark from the app icon, drawn for the menu bar: one key
+    /// outlined, the one overlapping it filled.
+    ///
+    /// Drawn rather than an SF Symbol, and marked as a template so macOS
+    /// recolours it for light, dark and tinted menu bars instead of us
+    /// shipping three images.
+    private static func menuBarGlyph() -> NSImage {
+        let side: CGFloat = 18
+        let image = NSImage(size: NSSize(width: side, height: side), flipped: false) { _ in
+            // The mark is specified top-left down to bottom-right; AppKit's
+            // origin is bottom-left, so the outlined key takes the high y.
+            let outlined = NSRect(x: 1.5, y: 6.5, width: 10, height: 10)
+            let filled = NSRect(x: 6.5, y: 1.5, width: 10, height: 10)
+            let radius: CGFloat = 2.4
+
+            NSColor.black.setStroke()
+            let top = NSBezierPath(roundedRect: outlined, xRadius: radius, yRadius: radius)
+            top.lineWidth = 1.6
+            top.stroke()
+
+            NSColor.black.setFill()
+            NSBezierPath(roundedRect: filled, xRadius: radius, yRadius: radius).fill()
+            return true
+        }
+        image.isTemplate = true
+        image.accessibilityDescription = "xkeys"
+        return image
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         guard !setupComplete else {
             Log.debug("applicationDidFinishLaunching: already set up, ignoring")
@@ -198,10 +227,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         statusItem.isVisible = true
 
         if let button = statusItem.button {
-            button.image = NSImage(
-                systemSymbolName: "keyboard",
-                accessibilityDescription: "xkeys"
-            )
+            button.image = Self.menuBarGlyph()
         }
 
         let menu = NSMenu()

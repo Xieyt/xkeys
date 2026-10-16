@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 512 512"
+     role="img" aria-label="xkeys icon: a translucent key overlapping another key">
+  <defs>
+    <linearGradient id="sheen" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.22"/>
+      <stop offset="0.55" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+
+  <!-- plate -->
+  <rect x="50" y="50" width="412" height="412" rx="92" fill="#f4f1ea"/>
+  <rect x="50" y="50" width="412" height="412" rx="92" fill="url(#sheen)"/>
+  <rect x="51" y="51" width="410" height="410" rx="91" fill="none" stroke="#000000" stroke-opacity="0.06" stroke-width="2"/>
+
+  <!-- lower key: solid, with its own shadow slab -->
+  <rect x="110" y="128" width="206" height="200" rx="48" fill="#1d3c94"/>
+  <rect x="110" y="110" width="206" height="200" rx="48" fill="#2f5bd3"/>
+  <circle cx="172" cy="170" r="22" fill="none" stroke="#ffffff" stroke-width="12"/>
+
+  <!-- upper key: translucent, overlapping -->
+  <rect x="196" y="214" width="206" height="200" rx="48" fill="#a8441c" fill-opacity="0.9"/>
+  <rect x="196" y="196" width="206" height="200" rx="48" fill="#ff7a45" fill-opacity="0.86"/>
+  <rect x="197" y="197" width="204" height="198" rx="47" fill="none" stroke="#ffffff" stroke-opacity="0.5" stroke-width="2"/>
+  <circle cx="342" cy="336" r="26" fill="#ffffff"/>
+</svg>

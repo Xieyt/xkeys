@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="Icon/icon-256.png" width="128" alt="xkeys icon">
+
 # xkeys
 
 **Remap keys at the driver level on macOS, and keep them remapped.**
