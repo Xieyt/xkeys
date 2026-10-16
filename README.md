@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="Icon/icon-256.png" width="128" alt="xkeys icon">
+<img src="assets/icon-256.png" width="128" alt="xkeys icon">
 
 # xkeys
 

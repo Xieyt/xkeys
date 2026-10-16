@@ -350,19 +350,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if let submenu = chordMenuItem.submenu {
             submenu.removeAllItems()
             let chords = ChordTap.active
+            // The row stays a plain word, like Swaps and Keyboards. Summarising
+            // the chord in the title repeated what the submenu already says and
+            // stretched the whole menu to the width of the longest chord.
             var lines: [String] = []
             if chords.isEmpty {
-                chordMenuItem.title = "Chords"
                 lines.append("No chords configured")
             } else if ChordTap.tapFailed {
-                chordMenuItem.title = "Chords"
                 lines.append("Needs Accessibility permission")
             } else {
-                chordMenuItem.title = chords.count == 1
-                    ? "Chords  \(KeyNames.name(for: chords[0].when)) → \(chords[0].holdDescription)"
-                    : "Chords  \(chords.count) configured"
                 for chord in chords {
-                    lines.append(chord.description + (chord.hide ? "   (trigger hidden)" : ""))
+                    lines.append(chord.description + chord.on.suffix + (chord.hide ? "   (trigger hidden)" : ""))
                 }
                 lines.append("applied after the window manager has taken its bindings")
             }
