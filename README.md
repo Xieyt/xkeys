@@ -1,8 +1,9 @@
 <div align="center">
 
-<img src="assets/icon-256.png" width="200" height="200" alt="xkeys icon">
-
-<h1>xkeys</h1>
+<h1>
+  <img src="assets/icon-256.png" width="88" height="88" align="center" alt="">
+  &nbsp;xkeys
+</h1>
 
 **Remap keys at the driver level on macOS, and keep them remapped.**
 
