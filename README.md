@@ -62,8 +62,32 @@ Four details that matter:
 
 - **`when` names the key your finger presses**, not what the swap turns it into. The trigger is read off the keyboard device, which reports the physical key.
 - **The chord runs late**, after a window manager has taken the keystrokes it binds. So a window manager keeps first pick, and nothing fires twice.
-- **Add as many chords as you like.** Each needs its own trigger; two held at once combine their modifiers.
+- **Add as many chords as you like.** Each needs its own trigger per keyboard; two held at once combine their modifiers.
 - **No `chords` block means no event tap is created at all.** Swaps alone need no permissions and intercept nothing.
+
+## Different keys on different keyboards
+
+Add `on` to any swap or chord and it applies to that keyboard alone. The value is a case-insensitive piece of the keyboard's name, so `"gk61"` matches `"gk61 pro 48"`.
+
+```json
+{
+  "swaps": [
+    { "from": "CapsLock",    "to": "Escape" },
+    { "from": "LeftCommand", "to": "F20", "on": "Apple Internal" },
+    { "from": "LeftControl", "to": "F20", "on": "gk61" }
+  ],
+  "chords": [
+    { "when": "LeftCommand", "on": "Apple Internal", "hold": ["Command","Control","Option","Shift"] },
+    { "when": "LeftControl", "on": "gk61",           "hold": ["Command","Control","Option","Shift"] }
+  ]
+}
+```
+
+Left Command is your trigger on the laptop keyboard; Left Control is the trigger on the external one. Both produce the same chord, so every shortcut you bind works from either keyboard without caring which one you are typing on. CapsLock has no `on`, so it stays Escape everywhere.
+
+`xkeys keys` prints the attached keyboards under their own heading, so you can copy a name from there. A rule naming a keyboard that is not plugged in is not an error — `xkeys doctor` reports it as waiting.
+
+One limit worth knowing: **hiding a trigger cannot be scoped.** By the time the keystroke reaches the part of xkeys that could swallow it, it carries a key but no longer says which keyboard sent it. So a trigger hidden on one keyboard is hidden on all — which is what you want anyway, since a bare tap of a trigger should type nothing.
 
 ## Why swap to a key that does not exist
 

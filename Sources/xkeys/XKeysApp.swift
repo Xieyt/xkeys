@@ -396,6 +396,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
+    /// The attached keyboard a scope names, so a scoped entry can be removed
+    /// from the device it was written to.
+    private func resolvedProduct(for scope: DeviceScope) -> String? {
+        productByDevice.values.first { scope.matches($0) }
+            ?? HIDMapping.attachedKeyboards().first { scope.matches($0) }
+    }
+
     /// Re-read the config and move the driver, and the chords, to match it.
     ///
     /// Swaps that were dropped from the file are taken back out, otherwise
@@ -406,14 +413,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let previous = ownedSwaps
         let (config, problems) = Config.load()
 
-        let stillWanted = Set(config.swaps.map(\.from))
-        let dropped = previous.filter { !stillWanted.contains($0.from) }
-        if !dropped.isEmpty { HIDMapping.remove(dropped) }
+        // Dropped means "no rule with this key and this scope survives", so a
+        // swap narrowed from every keyboard to one still has the old
+        // machine-wide entry taken back out.
+        let stillWanted = Set(config.swaps.map { "\($0.from)|\($0.on.needle ?? "*")" })
+        let dropped = previous.filter { !stillWanted.contains("\($0.from)|\($0.on.needle ?? "*")") }
+        for swap in dropped {
+            HIDMapping.remove([swap], product: swap.on.needle == nil ? nil : resolvedProduct(for: swap.on))
+        }
 
         ownedSwaps = config.swaps
         KeyboardMonitor.swaps = config.swaps
-        activeSwaps = Dictionary(uniqueKeysWithValues: config.swaps.map { ($0.from, $0.to) })
-        HIDMapping.apply(config.swaps)
+        // Per-device maps are rebuilt from the attached keyboards, so a
+        // narrowed or widened scope takes effect without a reconnect.
+        for (key, product) in productByDevice {
+            let mine = config.swaps.filter { $0.on.matches(product) }
+            swapsByDevice[key] = Dictionary(mine.map { ($0.from, $0.to) }) { a, _ in a }
+            let unscoped = config.swaps.filter { $0.on == .any }
+            if mine.count != unscoped.count { HIDMapping.apply(mine, product: product) }
+        }
+        HIDMapping.apply(config.swaps.filter { $0.on == .any })
 
         ChordTap.start(config.chords, swaps: config.swaps)
 

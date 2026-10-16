@@ -36,6 +36,7 @@ test:
       Sources/xkeys/Config.swift \
       Sources/xkeys/KeyNames.swift \
       Sources/xkeys/HIDKeyTable.swift \
+      Sources/xkeys/Chord.swift \
       Sources/xkeys/HIDMapping.swift \
       Sources/xkeys/Log.swift \
       Sources/xkeys/Constants.swift \

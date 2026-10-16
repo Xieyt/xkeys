@@ -155,6 +155,106 @@ do {
     expect(config.swaps.isEmpty && !problems.isEmpty, "unparseable JSON yields nothing and says so")
 }
 
+// MARK: - per-keyboard scope
+
+section("config: per-keyboard scope")
+
+do {
+    let (config, problems) = parse(#"""
+    { "swaps": [ { "from": "LeftCommand", "to": "F20", "on": "Apple Internal Keyboard / Trackpad" },
+                 { "from": "LeftControl", "to": "F20", "on": "gk61" } ],
+      "chords": [ { "when": "LeftCommand", "hold": ["Command"], "on": "Apple Internal" },
+                  { "when": "LeftControl", "hold": ["Shift"],   "on": "gk61" } ] }
+    """#)
+
+    expect(problems.isEmpty, "two keyboards with different triggers is a clean config")
+    expectEqual(config.swaps.count, 2, "both scoped swaps load")
+    expectEqual(config.chords.count, 2, "both scoped chords load")
+
+    let internalKeyboard = "Apple Internal Keyboard / Trackpad"
+    let external = "gk61 pro 48"
+
+    expect(config.swaps[0].on.matches(internalKeyboard), "the laptop swap matches the laptop keyboard")
+    expect(!config.swaps[0].on.matches(external), "the laptop swap does not touch the external keyboard")
+    expect(config.swaps[1].on.matches(external), "a substring matches the full product name")
+    expect(!config.swaps[1].on.matches(internalKeyboard), "and does not match the other keyboard")
+}
+
+do {
+    let (config, _) = parse(#"{ "swaps": [ { "from": "CapsLock", "to": "Escape" } ] }"#)
+    expect(config.swaps[0].on.matches("anything at all"), "an unscoped swap applies to every keyboard")
+    expectEqual(config.swaps[0].on, DeviceScope.any, "and reads as unscoped")
+}
+
+do {
+    let (config, _) = parse(#"{ "swaps": [ { "from": "CapsLock", "to": "Escape", "on": "GK61" } ] }"#)
+    expect(config.swaps[0].on.matches("gk61 pro 48"), "matching ignores case in both directions")
+}
+
+do {
+    // The same key on two keyboards is the whole point, and must not be
+    // mistaken for a duplicate.
+    let (config, problems) = parse(#"""
+    { "swaps": [ { "from": "LeftCommand", "to": "F20", "on": "Apple Internal" },
+                 { "from": "LeftCommand", "to": "F21", "on": "gk61" } ] }
+    """#)
+    expectEqual(config.swaps.count, 2, "one key swapped differently per keyboard is allowed")
+    expect(problems.isEmpty, "and is not reported as a duplicate")
+}
+
+do {
+    let (config, problems) = parse(#"""
+    { "swaps": [ { "from": "LeftCommand", "to": "F20", "on": "gk61" },
+                 { "from": "LeftCommand", "to": "F21", "on": "gk61" } ] }
+    """#)
+    expectEqual(config.swaps.count, 1, "the same key twice on the SAME keyboard is still a duplicate")
+    expect(problems.contains { $0.contains("more than once") }, "and is reported")
+}
+
+do {
+    let (config, problems) = parse(#"""
+    { "swaps": [],
+      "chords": [ { "when": "LeftCommand", "hold": ["Command"], "on": "gk61" },
+                  { "when": "LeftCommand", "hold": ["Shift"],   "on": "gk61" } ] }
+    """#)
+    expectEqual(config.chords.count, 1, "two chords on one key and one keyboard keep the first")
+    expect(problems.contains { $0.contains("more than one chord") }, "and the clash is reported")
+}
+
+do {
+    // What the keyboard watch does when a key goes down.
+    let (config, _) = parse(#"""
+    { "swaps": [],
+      "chords": [ { "when": "LeftCommand", "hold": ["Command"], "on": "Apple Internal" },
+                  { "when": "LeftCommand", "hold": ["Shift"],   "on": "gk61" } ] }
+    """#)
+    chordConfigs = config.chords
+    defer { chordConfigs = [] }
+
+    let onLaptop = chordIndices(forUsage: 0xE3, product: "Apple Internal Keyboard / Trackpad")
+    let onExternal = chordIndices(forUsage: 0xE3, product: "gk61 pro 48")
+    expectEqual(onLaptop, [0], "the same trigger key fires only the laptop's chord on the laptop")
+    expectEqual(onExternal, [1], "and only the external keyboard's chord on that keyboard")
+    expect(chordIndices(forUsage: 0x04, product: "gk61 pro 48").isEmpty, "a non-trigger key fires nothing")
+}
+
+do {
+    let (config, _) = parse(#"""
+    { "swaps": [],
+      "chords": [ { "when": "LeftCommand", "hold": ["Command"] },
+                  { "when": "LeftControl", "hold": ["Shift"] } ] }
+    """#)
+    chordConfigs = config.chords
+    defer { chordConfigs = []; chordHeldIndices = [] }
+
+    chordHeldIndices = [0]
+    expectEqual(chordActiveFlags(), .maskCommand, "one held chord contributes its own flags")
+    chordHeldIndices = [0, 1]
+    expectEqual(chordActiveFlags(), [.maskCommand, .maskShift], "two held at once union their flags")
+    chordHeldIndices = []
+    expectEqual(chordActiveFlags(), CGEventFlags(), "nothing held paints nothing")
+}
+
 // MARK: - hidutil property list
 
 section("hidutil output")

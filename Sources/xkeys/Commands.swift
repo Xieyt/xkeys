@@ -16,7 +16,16 @@ enum Commands {
     /// answer. "Apple never shipped this key" is the honest test.
     static func keys() {
         let (config, problems) = Config.load()
-        let live = HIDMapping.current()
+        let keyboards = HIDMapping.attachedKeyboards()
+
+        // Scoped swaps live on their own device, so the live list is the
+        // machine-wide one plus a read per keyboard any rule names.
+        var live = HIDMapping.current()
+        for product in keyboards where config.swaps.contains(where: { $0.on.needle != nil && $0.on.matches(product) }) {
+            for swap in HIDMapping.current(product: product) where !live.contains(where: { $0.sameKeys(as: swap) }) {
+                live.append(swap)
+            }
+        }
         let inUse = Set(live.map(\.to))
 
         print("Swaps in effect")
@@ -24,9 +33,19 @@ enum Commands {
             print("  (none)")
         } else {
             for swap in live {
-                let declared = config.swaps.contains(swap) ? "" : "   (not in your config)"
-                print("  \(swap.description)\(declared)")
+                let declared = config.swaps.first { $0.sameKeys(as: swap) }
+                let note = declared.map(\.on.suffix) ?? "   (not in your config)"
+                print("  \(swap.description)\(note)")
             }
+        }
+
+        print("")
+        if keyboards.isEmpty {
+            print("Keyboards attached")
+            print("  (none visible)")
+        } else {
+            print("Keyboards attached")
+            for product in keyboards { print("  \(product)") }
         }
 
         print("")
@@ -36,7 +55,7 @@ enum Commands {
         } else {
             for chord in config.chords {
                 let hidden = chord.hide ? "   (trigger hidden)" : ""
-                print("  \(chord.description)\(hidden)")
+                print("  \(chord.description)\(chord.on.suffix)\(hidden)")
             }
             print("  applied after the window manager has taken its bindings")
         }
@@ -207,19 +226,52 @@ enum Commands {
             faults.append(("config", problems + ["fix: xkeys check \(Config.path)"]))
         }
 
-        let live = HIDMapping.current()
-        let missing = config.swaps.filter { !live.contains($0) }
-        row("swaps live", "\(config.swaps.count - missing.count) of \(config.swaps.count) declared")
+        let keyboards = HIDMapping.attachedKeyboards()
+        if keyboards.isEmpty {
+            row("keyboards", "none visible")
+        } else {
+            for (i, product) in keyboards.enumerated() {
+                row(i == 0 ? "keyboards" : "", product)
+            }
+        }
+
+        // A scoped swap is only expected on the keyboards it names, so it is
+        // looked for there rather than in the machine-wide list.
+        let global = HIDMapping.current()
+        var perDevice: [String: [Swap]] = [:]
+        for product in keyboards where config.swaps.contains(where: { $0.on.needle != nil && $0.on.matches(product) }) {
+            perDevice[product] = HIDMapping.current(product: product)
+        }
+        let missing = config.swaps.filter { swap in
+            if swap.on.needle == nil {
+                return !global.contains { $0.sameKeys(as: swap) }
+            }
+            let targets = keyboards.filter { swap.on.matches($0) }
+            if targets.isEmpty { return false } // that keyboard is unplugged
+            return !targets.allSatisfy { product in
+                (perDevice[product] ?? []).contains { $0.sameKeys(as: swap) }
+            }
+        }
+        let unplugged = config.swaps.filter { swap in
+            swap.on.needle != nil && !keyboards.contains { swap.on.matches($0) }
+        }
+        let expected = config.swaps.count - unplugged.count
+        row("swaps live", "\(expected - missing.count) of \(expected) declared"
+            + (unplugged.isEmpty ? "" : ", \(unplugged.count) waiting on a keyboard"))
         if !missing.isEmpty {
-            faults.append(("swaps live", missing.map { "\($0.description) is missing" }
+            faults.append(("swaps live", missing.map { "\($0.description)\($0.on.suffix) is missing" }
                 + ["another tool may be writing the same driver list", "fix: just restart"]))
+        }
+
+        for swap in unplugged {
+            row("", "\(swap.description)\(swap.on.suffix) — that keyboard is not attached")
         }
 
         if config.chords.isEmpty {
             row("chords", "none configured")
         } else {
             for (i, chord) in config.chords.enumerated() {
-                row(i == 0 ? "chords" : "", chord.description)
+                row(i == 0 ? "chords" : "", chord.description + chord.on.suffix)
             }
         }
 

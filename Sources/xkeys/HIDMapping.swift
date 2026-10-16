@@ -23,23 +23,27 @@ enum HIDMapping {
     ///
     /// Ownership is by source key: an entry whose source matches one of our
     /// swaps is ours to replace, anything else is left exactly as found.
+    ///
+    /// `product` aims the write at one keyboard. Without it the write lands
+    /// on every keyboard, which is what an unscoped swap means.
     @discardableResult
-    static func apply(_ swaps: [Swap]) -> Bool {
+    static func apply(_ swaps: [Swap], product: String? = nil) -> Bool {
         let ours = swaps.map { Entry(src: KeyNames.hidValue($0.from), dst: KeyNames.hidValue($0.to)) }
         let ourSources = Set(ours.map(\.src))
-        let foreign = read().filter { !ourSources.contains($0.src) }
+        let foreign = read(product: product).filter { !ourSources.contains($0.src) }
         let merged = foreign + ours
 
-        Log.debug("HIDMapping.apply: \(ours.count) ours, \(foreign.count) left alone")
-        return write(merged)
+        Log.debug("HIDMapping.apply: \(ours.count) ours, \(foreign.count) left alone"
+            + (product.map { " [\($0)]" } ?? ""))
+        return write(merged, product: product)
     }
 
     /// Remove only the entries matching `swaps`, leaving everything else in
     /// place. This is what runs on quit.
     @discardableResult
-    static func remove(_ swaps: [Swap]) -> Bool {
+    static func remove(_ swaps: [Swap], product: String? = nil) -> Bool {
         let ourSources = Set(swaps.map { KeyNames.hidValue($0.from) })
-        let current = read()
+        let current = read(product: product)
         let kept = current.filter { !ourSources.contains($0.src) }
 
         if kept.count == current.count {
@@ -47,12 +51,12 @@ enum HIDMapping {
             return true
         }
         Log.debug("HIDMapping.remove: dropping \(current.count - kept.count), keeping \(kept.count)")
-        return write(kept)
+        return write(kept, product: product)
     }
 
     /// The swaps currently live in the driver, as a readable list.
-    static func current() -> [Swap] {
-        read().compactMap { entry in
+    static func current(product: String? = nil) -> [Swap] {
+        read(product: product).compactMap { entry in
             guard let from = KeyNames.usageFromHIDValue(entry.src),
                   let to = KeyNames.usageFromHIDValue(entry.dst)
             else { return nil }
@@ -60,33 +64,94 @@ enum HIDMapping {
         }
     }
 
+    /// Product names of every keyboard attached right now.
+    ///
+    /// Asked of `hidutil` rather than IOKit on purpose: this has to work from
+    /// `xkeys keys` and `xkeys check` in a plain terminal, where opening the
+    /// HID manager would be refused for lack of Input Monitoring.
+    static func attachedKeyboards() -> [String] {
+        guard let text = run(["property", "--matching", "keyboard", "--get", "Product"]) else { return [] }
+        var names: [String] = []
+        for line in text.split(separator: "\n").dropFirst() {
+            // "<registry id>   Product   <name>" — the name may contain spaces.
+            guard let range = line.range(of: "Product") else { continue }
+            let name = line[range.upperBound...].trimmingCharacters(in: .whitespaces)
+            if !name.isEmpty, !names.contains(name) { names.append(name) }
+        }
+        return names
+    }
+
     // MARK: - hidutil
 
-    private static func read() -> [Entry] {
-        guard let text = run(["property", "--get", "UserKeyMapping"]) else { return [] }
+    private static func read(product: String?) -> [Entry] {
+        guard let text = run(matching(product) + ["--get", "UserKeyMapping"]) else { return [] }
         return entries(fromPropertyList: text)
+    }
+
+    private static func matching(_ product: String?) -> [String] {
+        guard let product else { return ["property"] }
+        return ["property", "--matching", #"{"Product":"\#(product)"}"#]
     }
 
     /// Split out from the `hidutil` call so the parsing can be exercised
     /// without touching the driver.
     ///
-    /// hidutil prints an old-style (OpenStep) property list, not JSON, and
-    /// every value comes back as a string in that format — so both NSNumber
-    /// and String have to be accepted.
+    /// Two shapes have to be read. Unmatched, hidutil prints one bare
+    /// property list. Matched, it prints a table — a header line, then one
+    /// row per matching device, each row carrying its own list. Several HID
+    /// interfaces of one keyboard match at once, so a matched read returns
+    /// several lists; they describe the same keyboard, so the entries are
+    /// merged and de-duplicated by source key.
+    ///
+    /// Values are an old-style (OpenStep) property list, not JSON, and come
+    /// back as strings in that format — so both NSNumber and String have to
+    /// be accepted.
     static func entries(fromPropertyList text: String) -> [Entry] {
-        guard let parsed = try? PropertyListSerialization.propertyList(
-            from: Data(text.utf8), options: [], format: nil
-        ) as? [[String: Any]] else {
-            if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                Log.debug("HIDMapping.read: could not parse hidutil output")
+        var merged: [Entry] = []
+        var seen = Set<UInt64>()
+        var parsedAnything = false
+
+        for block in parenthesisedBlocks(in: text) {
+            guard let parsed = try? PropertyListSerialization.propertyList(
+                from: Data(block.utf8), options: [], format: nil
+            ) as? [[String: Any]] else { continue }
+            parsedAnything = true
+            for dict in parsed {
+                guard let src = number(dict[srcKey]), let dst = number(dict[dstKey]) else { continue }
+                if seen.insert(src).inserted { merged.append(Entry(src: src, dst: dst)) }
             }
-            return []
         }
 
-        return parsed.compactMap { dict in
-            guard let src = number(dict[srcKey]), let dst = number(dict[dstKey]) else { return nil }
-            return Entry(src: src, dst: dst)
+        if !parsedAnything, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            Log.debug("HIDMapping.read: could not parse hidutil output")
         }
+        return merged
+    }
+
+    /// Every balanced `( … )` run in the text, so a multi-device table can be
+    /// taken apart without guessing where one list ends and the next begins.
+    private static func parenthesisedBlocks(in text: String) -> [Substring] {
+        var blocks: [Substring] = []
+        var depth = 0
+        var start: String.Index?
+
+        for index in text.indices {
+            switch text[index] {
+            case "(":
+                if depth == 0 { start = index }
+                depth += 1
+            case ")":
+                guard depth > 0 else { continue }
+                depth -= 1
+                if depth == 0, let from = start {
+                    blocks.append(text[from...index])
+                    start = nil
+                }
+            default:
+                continue
+            }
+        }
+        return blocks
     }
 
     private static func number(_ value: Any?) -> UInt64? {
@@ -95,11 +160,11 @@ enum HIDMapping {
         return nil
     }
 
-    private static func write(_ entries: [Entry]) -> Bool {
+    private static func write(_ entries: [Entry], product: String?) -> Bool {
         let body = entries
             .map { "{\"\(srcKey)\":\($0.src),\"\(dstKey)\":\($0.dst)}" }
             .joined(separator: ",")
-        return run(["property", "--set", "{\"UserKeyMapping\":[\(body)]}"]) != nil
+        return run(matching(product) + ["--set", "{\"UserKeyMapping\":[\(body)]}"]) != nil
     }
 
     @discardableResult

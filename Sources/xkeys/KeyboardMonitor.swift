@@ -3,14 +3,19 @@ import Foundation
 import IOKit
 import IOKit.hid
 
-/// The swaps to apply when replaying a seized keyboard, as source usage ->
-/// destination usage. A seized device is read below the layer that performs
-/// the driver swap, so the swap has to be redone here or external keyboards
-/// would behave differently from the built-in one.
+/// The swaps to redo in software when replaying a seized keyboard, per
+/// device. A seized device is read below the layer that performs the driver
+/// swap, so the swap has to be redone here or external keyboards would
+/// behave differently from the built-in one. Per device because a swap may
+/// be scoped to one keyboard.
 ///
 /// Global because the IOKit callback is a C function pointer that cannot
 /// capture context. It runs on the main run loop, so no locking is needed.
-nonisolated(unsafe) var activeSwaps: [UInt32: UInt32] = [:]
+nonisolated(unsafe) var swapsByDevice: [UnsafeMutableRawPointer: [UInt32: UInt32]] = [:]
+
+/// Product name per device, resolved once at connect rather than asked of
+/// IOKit on every keystroke.
+nonisolated(unsafe) var productByDevice: [UnsafeMutableRawPointer: String] = [:]
 
 /// Held modifiers, per seized keyboard.
 ///
@@ -55,7 +60,6 @@ enum KeyboardMonitor {
 
     static func start(swaps: [Swap]) {
         self.swaps = swaps
-        activeSwaps = Dictionary(uniqueKeysWithValues: swaps.map { ($0.from, $0.to) })
 
         // Ask for Input Monitoring before opening the manager. Calling
         // IOHIDManagerOpen cold is denied WITHOUT prompting when the grant is
@@ -130,10 +134,23 @@ private func deviceConnectedCallback(
     _ device: IOHIDDevice
 ) {
     let name = productName(device)
+    let key = deviceKey(device)
+    productByDevice[key] = name
+
+    // Which rules this keyboard gets: the unscoped ones, plus any scoped to
+    // its product name.
+    let mine = KeyboardMonitor.swaps.filter { $0.on.matches(name) }
+    swapsByDevice[key] = Dictionary(mine.map { ($0.from, $0.to) }) { a, _ in a }
 
     // A new keyboard resets the driver's swap list, so re-apply on every
-    // connect regardless of which kind of keyboard it is.
-    HIDMapping.apply(KeyboardMonitor.swaps)
+    // connect regardless of which kind of keyboard it is. Unscoped swaps go
+    // to every keyboard at once; if any rule is scoped, this keyboard also
+    // gets its own list written with a device filter.
+    let unscoped = KeyboardMonitor.swaps.filter { $0.on == .any }
+    HIDMapping.apply(unscoped)
+    if mine.count != unscoped.count {
+        HIDMapping.apply(mine, product: name)
+    }
 
     if isBuiltIn(device) {
         // Watch, do not seize. A seized device stops delivering to the normal
@@ -142,7 +159,7 @@ private func deviceConnectedCallback(
         // input. It exists so the chord can tell when the trigger key is
         // down: the window manager deletes that keystroke before any event
         // tap sees it, and the device is the one place still holding it.
-        if !chordTriggerUsages.isEmpty {
+        if !chordConfigs.isEmpty {
             IOHIDDeviceRegisterInputValueCallback(device, passiveInputCallback, nil)
         }
         Log.info("deviceConnected: built-in keyboard (\(name)) - driver swap only")
@@ -179,6 +196,8 @@ private func deviceRemovedCallback(
     // Only this keyboard's modifiers are gone. Clearing every device's would
     // drop a modifier still held on a keyboard that never left.
     modifierFlagsByDevice.removeValue(forKey: deviceKey(device))
+    swapsByDevice.removeValue(forKey: deviceKey(device))
+    productByDevice.removeValue(forKey: deviceKey(device))
 }
 
 // MARK: - HID Input Callback
@@ -202,19 +221,20 @@ private func hidInputCallback(
 
     // Trigger state is read before the swap, from the key the hardware
     // actually reports, so an external keyboard drives a chord the same way
-    // the built-in one does.
-    if chordTriggerUsages.contains(usage) {
+    // the built-in one does. Scoped chords only count on their keyboard.
+    let product = productByDevice[key] ?? ""
+    for index in chordIndices(forUsage: usage, product: product) {
         if pressed {
-            chordHeldTriggers.insert(usage)
+            chordHeldIndices.insert(index)
         } else {
-            chordHeldTriggers.remove(usage)
+            chordHeldIndices.remove(index)
         }
     }
 
     // Seizure reads the device below the layer that performs the driver swap,
-    // so apply the swap here to keep external keyboards identical to the
+    // so apply this keyboard's swaps here to keep it identical to the
     // built-in one.
-    if let swapped = activeSwaps[usage] {
+    if let swapped = swapsByDevice[key]?[usage] {
         usage = swapped
     }
 
@@ -249,11 +269,16 @@ private func passiveInputCallback(
     let element = IOHIDValueGetElement(value)
     guard IOHIDElementGetUsagePage(element) == 0x07 else { return }
     let usage = IOHIDElementGetUsage(element)
-    guard chordTriggerUsages.contains(usage) else { return }
-    if IOHIDValueGetIntegerValue(value) != 0 {
-        chordHeldTriggers.insert(usage)
-    } else {
-        chordHeldTriggers.remove(usage)
+    let key = deviceKey(IOHIDElementGetDevice(element))
+    let product = productByDevice[key] ?? ""
+    let pressed = IOHIDValueGetIntegerValue(value) != 0
+
+    for index in chordIndices(forUsage: usage, product: product) {
+        if pressed {
+            chordHeldIndices.insert(index)
+        } else {
+            chordHeldIndices.remove(index)
+        }
     }
 }
 

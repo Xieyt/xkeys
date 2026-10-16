@@ -182,8 +182,9 @@ Flat one-to-one swaps and one chord. **No layers, no per-app rules, no tap-versu
 
 ```json
 { "swaps": [ { "from": "CapsLock",    "to": "Escape" },
-             { "from": "LeftCommand", "to": "F20" } ],
-  "chords": [ { "when": "LeftCommand",
+             { "from": "LeftCommand", "to": "F20", "on": "Apple Internal" },
+             { "from": "LeftControl", "to": "F20", "on": "gk61" } ],
+  "chords": [ { "when": "LeftCommand", "on": "Apple Internal",
                 "hold": ["Command", "Control", "Option", "Shift"],
                 "hide": true } ] }
 ```
@@ -191,9 +192,22 @@ Flat one-to-one swaps and one chord. **No layers, no per-app rules, no tap-versu
 - Key names come from `KeyNames.byName` (~110 names: letters, digits, F1–F24, arrows, punctuation, all 8 modifiers L/R, HID editing keys, Lang/Intl). `xkeys keys` prints the vocabulary.
 - `hold` vocabulary: `command`, `control`, `option`, `shift`, `function` (case-insensitive).
 - `when` names the **physical** key, never the swapped-to key. See the Decisions log.
+- `on` scopes a rule to one keyboard: a case-insensitive **substring** of the product name. Absent means every keyboard, which is what every rule meant before scoping existed. The internal keyboard reports vendor and product `0x0000`, so name matching is the only way to single it out.
+- The same key may be swapped once per scope; twice in the same scope is still a duplicate.
 - Overrides: `XKEYS_CONFIG=<path>`, `XDG_CONFIG_HOME`.
 - The singular `"chord"` key is **not** read. A config still using it gets a problem naming the replacement rather than losing its chord in silence.
 - Two chords held at once union their flags.
+
+### How scoping is enforced, layer by layer
+
+| layer | mechanism |
+|---|---|
+| Driver swap | `hidutil property --matching '{"Product":"<exact name>"}' --set`. Unscoped rules are written with no filter, so they land on every keyboard; a keyboard with any scoped rule also gets its own list written. |
+| Seized external keyboard | `swapsByDevice` — the software re-swap, per device. The driver write is belt-and-braces there; this is what actually decides the key. |
+| Chord trigger | `chordIndices(forUsage:product:)` — the watch knows which device the press came from. |
+| `hide` | **Cannot be scoped.** By the session-tap stage the event carries a keycode and no device. A trigger hidden for one keyboard is hidden for all, which is what you want anyway. |
+
+A matched `hidutil --get` prints a table with one row per matching HID interface, each carrying its own list — unlike an unmatched read, which prints one bare list. `HIDMapping.entries(fromPropertyList:)` handles both by pulling every balanced `( … )` block and merging by source key.
 
 ### Output contracts (parsed by `just status`)
 
@@ -201,6 +215,7 @@ Flat one-to-one swaps and one chord. **No layers, no per-app rules, no tap-versu
 
 ```
 Swaps in effect
+Keyboards attached
 Chords for other apps
 Safe swap targets — no Apple keyboard has ever had these keys
 Config problems           (only when problems exist)

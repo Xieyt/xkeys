@@ -1,23 +1,30 @@
 import CoreGraphics
 import Foundation
 
-/// Which physical keys are triggers, and which of them are down right now.
-/// Written by the keyboard watch, read by the event tap. Both run on the main
-/// run loop, so no locking is needed. Global because the tap callback is a C
-/// function pointer that cannot capture context.
-nonisolated(unsafe) var chordTriggerUsages: Set<UInt32> = []
-nonisolated(unsafe) var chordHeldTriggers: Set<UInt32> = []
+/// The armed chords, and which of them are held right now.
+///
+/// Held is tracked by index rather than by trigger key, because two chords
+/// may use the same key on different keyboards. Written by the keyboard
+/// watch, read by the event tap. Both run on the main run loop, so no locking
+/// is needed. Global because the tap callback is a C function pointer that
+/// cannot capture context.
+nonisolated(unsafe) var chordConfigs: [Chord] = []
+nonisolated(unsafe) var chordHeldIndices: Set<Int> = []
 
-/// Flags contributed by each trigger, and the keycodes to swallow.
-nonisolated(unsafe) private var chordFlagsByTrigger: [UInt32: CGEventFlags] = [:]
+/// Keycodes to swallow, and whether any chord wants swallowing at all.
 nonisolated(unsafe) private var chordHiddenKeyCodes: Set<UInt16> = []
 
-/// Everything the held triggers add up to. Two triggers held at once union
-/// their flags, which is the only sane reading of "both are held".
+/// Indices of the chords a given key on a given keyboard triggers.
+func chordIndices(forUsage usage: UInt32, product: String) -> [Int] {
+    chordConfigs.indices.filter { chordConfigs[$0].when == usage && chordConfigs[$0].on.matches(product) }
+}
+
+/// Everything the held chords add up to. Two held at once union their flags,
+/// which is the only sane reading of "both are held".
 func chordActiveFlags() -> CGEventFlags {
     var flags: CGEventFlags = []
-    for usage in chordHeldTriggers {
-        if let f = chordFlagsByTrigger[usage] { flags.insert(f) }
+    for index in chordHeldIndices where index < chordConfigs.count {
+        flags.insert(chordConfigs[index].hold)
     }
     return flags
 }
@@ -58,15 +65,21 @@ enum ChordTap {
         guard !chords.isEmpty else { return }
 
         active = chords
-        chordTriggerUsages = Set(chords.map(\.when))
-        chordHeldTriggers = []
-        chordFlagsByTrigger = Dictionary(chords.map { ($0.when, $0.hold) }) { a, _ in a }
+        chordConfigs = chords
+        chordHeldIndices = []
 
         // A trigger reaches the event stream as whatever the driver swapped
         // it to, so hiding it means hiding that key, not the one pressed.
+        //
+        // Hiding cannot be scoped to one keyboard: by this stage the event
+        // carries no device, only a keycode. A trigger hidden for one
+        // keyboard is therefore hidden for all — which is what you want
+        // anyway, since a bare trigger press should type nothing anywhere.
         chordHiddenKeyCodes = Set(chords.compactMap { chord -> UInt16? in
             guard chord.hide else { return nil }
-            let arrivesAs = swaps.first { $0.from == chord.when }?.to ?? chord.when
+            let arrivesAs = swaps.first { $0.from == chord.when && $0.on == chord.on }?.to
+                ?? swaps.first { $0.from == chord.when }?.to
+                ?? chord.when
             return HIDKeyTable.virtualKeyCode(forUsage: arrivesAs)
         })
 
@@ -92,7 +105,7 @@ enum ChordTap {
         CFRunLoopAddSource(CFRunLoopGetMain(), src, .commonModes)
         CGEvent.tapEnable(tap: port, enable: true)
         tapFailed = false
-        for chord in chords { Log.info("ChordTap.start: \(chord.description)") }
+        for chord in chords { Log.info("ChordTap.start: \(chord.description)\(chord.on.suffix)") }
     }
 
     /// Tear the tap down and forget every trigger. Without the teardown, a
@@ -105,9 +118,8 @@ enum ChordTap {
         source = nil
         active = []
         tapFailed = false
-        chordTriggerUsages = []
-        chordHeldTriggers = []
-        chordFlagsByTrigger = [:]
+        chordConfigs = []
+        chordHeldIndices = []
         chordHiddenKeyCodes = []
     }
 
