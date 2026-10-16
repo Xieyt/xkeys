@@ -160,13 +160,17 @@ setup-signing-cert:
       'extendedKeyUsage = critical,codeSigning' \
       '1.2.840.113635.100.6.1.14 = critical,DER:0500' \
       > "$tmp/cert.conf"
-    openssl req -x509 -newkey rsa:2048 -nodes -days 3650 \
+    /usr/bin/openssl req -x509 -newkey rsa:2048 -nodes -days 3650 \
       -keyout "$tmp/key.pem" -out "$tmp/cert.pem" -config "$tmp/cert.conf" 2>/dev/null
-    # -legacy and a real password are both required: OpenSSL 3 defaults to an
-    # AES/SHA-256 PKCS#12 that the Security framework refuses with "MAC
-    # verification failed", and an empty password fails the same way.
-    openssl pkcs12 -export -legacy -inkey "$tmp/key.pem" -in "$tmp/cert.pem" \
-      -name "{{signing_cert}}" -out "$tmp/id.p12" -passout pass:xkeys 2>/dev/null
+    # /usr/bin/openssl, not whatever is on PATH: a stock Mac has LibreSSL,
+    # which rejects OpenSSL 3's -legacy flag, while OpenSSL 3 on PATH writes
+    # an AES/SHA-256 archive the Security framework refuses to import with
+    # "MAC verification failed". The explicit 3DES/SHA-1 flags below are
+    # understood by both and import cleanly. An empty password also fails,
+    # hence a real one.
+    /usr/bin/openssl pkcs12 -export -inkey "$tmp/key.pem" -in "$tmp/cert.pem" \
+      -name "{{signing_cert}}" -out "$tmp/id.p12" -passout pass:xkeys \
+      -keypbe PBE-SHA1-3DES -certpbe PBE-SHA1-3DES -macalg sha1 2>/dev/null
     sudo security import "$tmp/id.p12" -k "{{sys_keychain}}" -P xkeys -T /usr/bin/codesign -A
     # Importing is not enough: an untrusted self-signed certificate is not a
     # usable signing identity, and codesign answers "no identity found".
