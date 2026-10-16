@@ -21,10 +21,30 @@ jobs:
           plutil -replace CFBundleVersion -string "$VERSION" Info.plist
           plutil -replace CFBundleShortVersionString -string "$VERSION" Info.plist
 
+      - name: Run the pure-logic checks
+        run: |
+          xcrun --sdk macosx swiftc -O \
+            Sources/xkeys/Config.swift \
+            Sources/xkeys/KeyNames.swift \
+            Sources/xkeys/HIDKeyTable.swift \
+            Sources/xkeys/Chord.swift \
+            Sources/xkeys/HIDMapping.swift \
+            Sources/xkeys/Log.swift \
+            Sources/xkeys/Constants.swift \
+            Checks/main.swift \
+            -o /tmp/checks
+          /tmp/checks
+
       - name: Build universal binary
         run: |
           swift build -c release --arch arm64 --arch x86_64
 
+      # Ad-hoc, because there is no Developer ID certificate for this project.
+      # Two consequences, both stated in the release notes below: the download
+      # is quarantined by Gatekeeper, and the signature changes every release,
+      # so macOS treats each version as a new app and asks for Accessibility
+      # and Input Monitoring again. Building from source with a stable local
+      # identity avoids both.
       - name: Create and sign app bundle
         run: |
           mkdir -p xkeys.app/Contents/MacOS xkeys.app/Contents/Resources
@@ -42,3 +62,17 @@ jobs:
         with:
           files: xkeys.zip
           generate_release_notes: true
+          body: |
+            Download, unzip, and move `xkeys.app` to `/Applications`.
+
+            This build is ad-hoc signed, which costs you two things:
+
+            - macOS quarantines it. Clear that with
+              `xattr -dr com.apple.quarantine /Applications/xkeys.app`, or
+              right-click the app and choose Open the first time.
+            - The signature changes every release, so each update asks for
+              Accessibility and Input Monitoring again.
+
+            Building from source avoids both: `just setup-signing-cert` makes
+            one stable local identity, and the permission grants then survive
+            every rebuild.

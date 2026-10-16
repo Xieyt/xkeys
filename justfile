@@ -161,13 +161,24 @@ setup-signing-cert:
       '1.2.840.113635.100.6.1.14 = critical,DER:0500' \
       > "$tmp/cert.conf"
     openssl req -x509 -newkey rsa:2048 -nodes -days 3650 \
-      -keyout "$tmp/key.pem" -out "$tmp/cert.pem" -config "$tmp/cert.conf"
-    openssl pkcs12 -export -inkey "$tmp/key.pem" -in "$tmp/cert.pem" \
-      -name "{{signing_cert}}" -out "$tmp/id.p12" -passout pass:
-    sudo security import "$tmp/id.p12" -k "{{sys_keychain}}" -P "" -T /usr/bin/codesign -A
+      -keyout "$tmp/key.pem" -out "$tmp/cert.pem" -config "$tmp/cert.conf" 2>/dev/null
+    # -legacy and a real password are both required: OpenSSL 3 defaults to an
+    # AES/SHA-256 PKCS#12 that the Security framework refuses with "MAC
+    # verification failed", and an empty password fails the same way.
+    openssl pkcs12 -export -legacy -inkey "$tmp/key.pem" -in "$tmp/cert.pem" \
+      -name "{{signing_cert}}" -out "$tmp/id.p12" -passout pass:xkeys 2>/dev/null
+    sudo security import "$tmp/id.p12" -k "{{sys_keychain}}" -P xkeys -T /usr/bin/codesign -A
+    # Importing is not enough: an untrusted self-signed certificate is not a
+    # usable signing identity, and codesign answers "no identity found".
     sudo security add-trusted-cert -d -r trustRoot -p codeSign -k "{{sys_keychain}}" "$tmp/cert.pem"
     rm -rf "$tmp"
-    echo "'{{signing_cert}}' created and trusted. Re-run \`just install\`."
+    if security find-identity -v -p codesigning | grep -q "{{signing_cert}}"; then
+      echo "'{{signing_cert}}' created and trusted. Run \`just install\`."
+    else
+      echo "!! '{{signing_cert}}' was created but is not a valid signing identity."
+      echo "   Check: security find-identity -v -p codesigning"
+      exit 1
+    fi
 
 # --- debug logging (off by default; writes /tmp/xkeys.log) ---
 
