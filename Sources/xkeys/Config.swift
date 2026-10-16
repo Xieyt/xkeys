@@ -15,18 +15,22 @@ struct Swap: Equatable {
 struct Chord: Equatable {
     let when: UInt32 // HID usage of the physical trigger key
     let hold: CGEventFlags
-    let holdNames: [String]
     /// Swallow the trigger's own keystroke so no app receives it. Normally a
     /// no-op, because the window manager already removes it one stage
     /// earlier; it matters the day the window manager stops doing that.
     let hide: Bool
 
+    /// "Cmd+Ctrl+Opt+Shift" — derived from the flags rather than echoed back
+    /// from the config, so two configs that mean the same thing print the
+    /// same way and the order is stable.
+    var holdDescription: String { ModifierNames.describe(hold) }
+
     var description: String {
-        "\(KeyNames.name(for: when)) held -> \(holdNames.joined(separator: "+")) on the next key"
+        "\(KeyNames.name(for: when)) held  ->  \(holdDescription) on the next key"
     }
 }
 
-/// Modifier names accepted in `chord.hold`.
+/// Modifier names accepted in a chord's `hold` list.
 enum ModifierNames {
     static let byName: [String: CGEventFlags] = [
         "command": .maskCommand,
@@ -36,11 +40,22 @@ enum ModifierNames {
         "function": .maskSecondaryFn,
     ]
 
+    /// Display order is fixed so output never depends on config order.
+    private static let display: [(CGEventFlags, String)] = [
+        (.maskCommand, "Cmd"), (.maskControl, "Ctrl"), (.maskAlternate, "Opt"),
+        (.maskShift, "Shift"), (.maskSecondaryFn, "Fn"),
+    ]
+
     static func flag(for name: String) -> CGEventFlags? { byName[name.lowercased()] }
+
+    static func describe(_ flags: CGEventFlags) -> String {
+        let parts = display.filter { flags.contains($0.0) }.map(\.1)
+        return parts.isEmpty ? "nothing" : parts.joined(separator: "+")
+    }
 }
 
-/// The config file: a flat list of one-to-one key swaps, plus an optional
-/// chord.
+/// The config file: a flat list of one-to-one key swaps, plus any number of
+/// chords.
 ///
 /// JSON rather than TOML because this app has no dependencies and Swift reads
 /// JSON natively; a TOML parser would be the only third-party code in the tree.
@@ -48,18 +63,18 @@ enum ModifierNames {
 /// ```json
 /// { "swaps": [ { "from": "CapsLock",    "to": "Escape" },
 ///              { "from": "LeftCommand", "to": "F20" } ],
-///   "chord": { "when": "LeftCommand",
-///              "hold": ["Command", "Control", "Option", "Shift"],
-///              "hide": true } }
+///   "chords": [ { "when": "LeftCommand",
+///                 "hold": ["Command", "Control", "Option", "Shift"],
+///                 "hide": true } ] }
 /// ```
 ///
 /// There are deliberately no rules, layers, conditions or per-app behaviour.
-/// Anything beyond a flat swap and one chord is Karabiner's job.
+/// Anything beyond flat swaps and chords is Karabiner's job.
 struct Config {
     let swaps: [Swap]
-    let chord: Chord?
+    let chords: [Chord]
 
-    static let `default` = Config(swaps: [], chord: nil)
+    static let `default` = Config(swaps: [], chords: [])
 
     static var path: String {
         if let override = ProcessInfo.processInfo.environment["XKEYS_CONFIG"] {
@@ -83,14 +98,17 @@ struct Config {
         }
 
         let swaps: [Entry]
+        let chords: [ChordEntry]?
+        /// Only here to catch the retired singular spelling. A config that
+        /// still says `"chord"` would otherwise lose its chord in silence,
+        /// which is the one failure mode worse than an error message.
         let chord: ChordEntry?
     }
 
     /// Read and validate the config. Returns the parsed swaps plus any
     /// problems found; problems are surfaced in the menu rather than thrown,
     /// because a typo in one swap must not stop the other swaps from applying.
-    static func load() -> (config: Config, problems: [String]) {
-        let file = path
+    static func load(path file: String = Config.path) -> (config: Config, problems: [String]) {
         guard let data = FileManager.default.contents(atPath: file) else {
             return (.default, ["no config at \(file)"])
         }
@@ -102,6 +120,18 @@ struct Config {
             return (.default, ["\(file): \(error.localizedDescription)"])
         }
 
+        return parse(document)
+    }
+
+    /// Split from `load` so the parsing rules can be exercised without a file.
+    static func parse(_ data: Data) -> (config: Config, problems: [String]) {
+        guard let document = try? JSONDecoder().decode(Document.self, from: data) else {
+            return (.default, ["could not parse as JSON"])
+        }
+        return parse(document)
+    }
+
+    private static func parse(_ document: Document) -> (config: Config, problems: [String]) {
         var swaps: [Swap] = []
         var problems: [String] = []
         var seen = Set<UInt32>()
@@ -122,37 +152,51 @@ struct Config {
             swaps.append(Swap(from: from, to: to))
         }
 
-        return (Config(swaps: swaps, chord: parseChord(document.chord, problems: &problems)), problems)
+        if document.chord != nil {
+            problems.append(#""chord" is no longer read; rename it to "chords": [ … ]"#)
+        }
+
+        var chords: [Chord] = []
+        var triggers = Set<UInt32>()
+        for entry in document.chords ?? [] {
+            guard let chord = parseChord(entry, problems: &problems) else { continue }
+            guard triggers.insert(chord.when).inserted else {
+                problems.append(
+                    "chord: '\(KeyNames.name(for: chord.when))' triggers more than one chord; keeping the first"
+                )
+                continue
+            }
+            chords.append(chord)
+        }
+
+        return (Config(swaps: swaps, chords: chords), problems)
     }
 
-    /// A malformed chord disables the chord and nothing else — the swaps are
+    /// A malformed chord disables that chord and nothing else — the swaps are
     /// what keep your Escape key working, and must not fail with it.
     private static func parseChord(
-        _ entry: Document.ChordEntry?,
+        _ entry: Document.ChordEntry,
         problems: inout [String]
     ) -> Chord? {
-        guard let entry else { return nil }
         guard let when = KeyNames.usage(for: entry.when) else {
             problems.append("chord: unknown key name '\(entry.when)'")
             return nil
         }
         guard !entry.hold.isEmpty else {
-            problems.append("chord: 'hold' is empty; nothing would be added to a key")
+            problems.append("chord: '\(entry.when)' holds nothing; it would add no modifiers")
             return nil
         }
 
         var flags: CGEventFlags = []
-        var names: [String] = []
         for name in entry.hold {
             guard let flag = ModifierNames.flag(for: name) else {
                 problems.append("chord: unknown modifier '\(name)'")
                 continue
             }
             flags.insert(flag)
-            names.append(name)
         }
         guard !flags.isEmpty else { return nil }
 
-        return Chord(when: when, hold: flags, holdNames: names, hide: entry.hide ?? true)
+        return Chord(when: when, hold: flags, hide: entry.hide ?? true)
     }
 }

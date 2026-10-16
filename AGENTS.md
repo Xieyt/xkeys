@@ -70,7 +70,7 @@ Each ordering constraint encodes a real past bug — see **Gotchas** below. Do n
 - **Built-in** (`kIOHIDBuiltInKey`, or transport `SPI`/`BuiltIn` — `KeyboardMonitor.swift:102-115`): driver swap only. If a chord is configured, a **passive, non-seizing** input callback is registered that reads *only* whether the trigger is down and injects nothing.
 - **External**: `IOHIDDeviceOpen(kIOHIDOptionsTypeSeizeDevice)`. On success, register the input callback and replay. **On failure, skip the device entirely** — never register a callback on an unseized device, or input doubles. Keyboards commonly expose 2+ HID interfaces; the extras fail with `kIOReturnExclusiveAccess` and are correctly skipped.
 - Replayed events are stamped with `CGEventField(43) = 0x584B_4559` (`"XKEY"`) so replay cannot be mistaken for real input (`Constants.swift:22-26`).
-- Seizure handles **keyboard page 0x07 only**. Consumer page `0x0C` (volume, brightness, play/pause) is **not** re-injected — media keys on a seized keyboard stop working.
+- Seizure handles **keyboard page 0x07 only**. The consumer page (`0x0C` — volume, brightness, play/pause) is not replayed, but that does **not** kill media keys: on the keyboards measured so far the consumer collection lives on an interface seizure *fails* on, which is then skipped, so it keeps delivering normally. Measured on a GK61 and the internal keyboard — 291 presses, nothing suppressed. Do not "fix" this without a keyboard that actually reproduces a loss.
 
 ## Key Directories
 
@@ -109,16 +109,20 @@ env -u SDKROOT -u DEVELOPER_DIR -u LIBRARY_PATH /usr/bin/swift build -c release
 
 For one-off `swiftc` compiles use `env -u SDKROOT -u DEVELOPER_DIR /usr/bin/xcrun --sdk macosx swiftc ...`.
 
-### CLI surface (`XKeysApp.swift:24-46`)
+### CLI surface (`XKeysApp.swift:24-60`)
 
 ```
-xkeys               run as a menu bar agent
-xkeys keys          live swaps + chord + safe swap targets
-xkeys watch         name each key as you press it (never returns; needs Accessibility)
-xkeys --uninstall   remove only this app's swaps and exit
-xkeys --version     "xkeys 1.0.0"
+xkeys                run as a menu bar agent
+xkeys keys           live swaps + chords + safe swap targets
+xkeys watch          name each key as you press it (never returns; needs Accessibility)
+xkeys doctor         process, signature, grants, config, live swaps, chords
+xkeys check <file>   validate a config without applying it; exit 1 on problems
+xkeys --uninstall    remove only this app's swaps and exit
+xkeys --version      "xkeys 1.0.0"
 xkeys --help | -h
 ```
+
+`doctor` reads the permission grants out of `TCC.db` rather than asking the system about itself: it runs as a short-lived command-line process, so a direct check would report the terminal's grants, not the menu bar app's.
 
 Any other non-empty argument → error + usage, `exit 2`.
 
@@ -179,15 +183,17 @@ Flat one-to-one swaps and one chord. **No layers, no per-app rules, no tap-versu
 ```json
 { "swaps": [ { "from": "CapsLock",    "to": "Escape" },
              { "from": "LeftCommand", "to": "F20" } ],
-  "chord": { "when": "LeftCommand",
-             "hold": ["Command", "Control", "Option", "Shift"],
-             "hide": true } }
+  "chords": [ { "when": "LeftCommand",
+                "hold": ["Command", "Control", "Option", "Shift"],
+                "hide": true } ] }
 ```
 
 - Key names come from `KeyNames.byName` (~110 names: letters, digits, F1–F24, arrows, punctuation, all 8 modifiers L/R, HID editing keys, Lang/Intl). `xkeys keys` prints the vocabulary.
 - `hold` vocabulary: `command`, `control`, `option`, `shift`, `function` (case-insensitive).
 - `when` names the **physical** key, never the swapped-to key. See the Decisions log.
 - Overrides: `XKEYS_CONFIG=<path>`, `XDG_CONFIG_HOME`.
+- The singular `"chord"` key is **not** read. A config still using it gets a problem naming the replacement rather than losing its chord in silence.
+- Two chords held at once union their flags.
 
 ### Output contracts (parsed by `just status`)
 
@@ -195,7 +201,7 @@ Flat one-to-one swaps and one chord. **No layers, no per-app rules, no tap-versu
 
 ```
 Swaps in effect
-Chord for other apps
+Chords for other apps
 Safe swap targets — no Apple keyboard has ever had these keys
 Config problems           (only when problems exist)
 ```
@@ -213,15 +219,20 @@ Config problems           (only when problems exist)
 
 ## Testing & QA
 
-### There are no automated tests
+### `just test` — pure-logic checks, and why they are not a test target
 
-No `Tests/` directory, no test target in `Package.swift`, zero `XCTest`/`swift-testing` references, no test recipe in `just` or `make`. CI (`.github/workflows/release.yml`) builds on tag push only and runs nothing. **Do not claim test coverage. Do not add a test target without being asked** — this app's behaviour lives in driver state, IOKit seizure, and event taps, none of which a unit test can observe.
+`Checks/main.swift` holds ~90 assertions over the config parser, the hidutil property-list parser, and the key-name/keycode tables. `just test` compiles it together with the six source files it covers and runs it. It needs nothing installed and takes about ten seconds.
 
-### How this project is actually verified
+**There is no `Tests/` directory and no test target, and that is not a preference.** This machine has Command Line Tools and no Xcode, which ships neither `XCTest` nor `Testing` — `swift test` cannot run here with either framework. A suite that cannot execute on the machine it guards is worse than none. If Xcode is ever installed, converting `Checks/main.swift` to a real target is mechanical.
 
-1. `just status` — the fast check: pid, signing Authority, live swaps read back from hidutil, chord config, TCC grants read directly out of `TCC.db`.
-2. `xkeys watch` — name keys as you press them, with what the system actually received after swapping.
-3. **A signed throwaway probe bundle** — the only way to observe tap/hotkey/HID behaviour. Recipe below.
+**Nothing beyond pure logic is checked, deliberately.** Driver state, device seizure and event taps are not observable from a separate process. Do not add assertions that pretend otherwise.
+
+### How the rest is verified
+
+1. `xkeys doctor` — process, signature, both permissions, config, live-versus-declared swaps, chords, each failure naming its cost and fix.
+2. `just status` — the same ground read straight from `hidutil` and `TCC.db`.
+3. `xkeys watch` — name keys as you press them, with what the system received, and the flags a chord painted on.
+4. **A signed throwaway probe bundle** — the only way to observe tap/hotkey/HID behaviour. Recipe below.
 
 ### The probe recipe (and its two traps)
 
@@ -305,15 +316,16 @@ Each of these is a bug that already happened. The source comments carry the deta
 - **Re-apply swaps on every keyboard connect** — a new keyboard resets the driver's swap list.
 - **Seize-failure ⇒ skip the device.** Registering an input callback on an unseized device doubles every keystroke.
 - **Read trigger state before applying the software swap**, from the usage the hardware reports, so external and built-in keyboards behave identically.
+- **Modifier state is per device.** One shared value let a Shift held on one external keyboard colour keys typed on another, and let unplugging either keyboard clear a modifier the other was still holding.
 - **Injected events must carry the `XKEY` marker** or replay is indistinguishable from real input.
 - **`IOHIDManagerOpen` cold is denied without prompting.** Call `IOHIDRequestAccess` first.
-- **Media keys on seized keyboards are dead** — consumer page `0x0C` is not re-injected.
+- **Media keys are NOT killed by seizure.** Measured: the interface carrying the consumer collection is the one seizure fails on, which is then skipped, so it keeps delivering. 291 presses across a GK61 and the internal keyboard produced no suppressed media event. Do not "fix" this without a keyboard that reproduces a loss.
 
 ### Chord
 
 - **Re-enable the tap on `tapDisabledByTimeout`/`ByUserInput`.** Without it the chord dies silently mid-session and only a restart brings it back.
 - **`hide` targets the key the trigger *arrives as*** after the driver swap, not the key pressed.
-- **Known limitation**: `reloadConfig` re-applies swaps but does **not** re-arm the chord. Changing the chord requires an app restart.
+- **Reload re-arms the chords.** `reloadConfig` tears the tap down and rebuilds it, so a trigger removed from the file stops being a trigger without a restart.
 
 ### Repo hygiene
 

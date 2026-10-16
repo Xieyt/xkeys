@@ -36,6 +36,12 @@ enum UpdateChecker {
         request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
         request.timeoutInterval = 10
 
+        // Stamp the check time before inspecting the result, so a failure
+        // throttles exactly like a success. Returning early without it meant
+        // a repository with no releases answered 404 and was re-asked on
+        // every launch, forever.
+        defaults.set(Date(), forKey: lastCheckKey)
+
         guard let (data, response) = try? await URLSession.shared.data(for: request),
               let http = response as? HTTPURLResponse,
               http.statusCode == 200,
@@ -47,8 +53,6 @@ enum UpdateChecker {
             ? String(release.tag_name.dropFirst())
             : release.tag_name
 
-        // Cache the result
-        defaults.set(Date(), forKey: lastCheckKey)
 
         if isNewer(latest, than: Constants.version) {
             defaults.set(latest, forKey: cachedVersionKey)

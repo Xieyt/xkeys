@@ -33,7 +33,7 @@ On macOS 26+ a `CGEventTap` receives nothing at all from external keyboards. Eve
 
 xkeys seizes external keyboards directly over IOKit and replays their keystrokes as ordinary events, applying your swaps on the way through, so those programs work again. Built-in keyboards need none of this; the driver swap is enough.
 
-Media keys are the known gap: the consumer HID page is not replayed, so volume and brightness keys on a seized keyboard stop working.
+Media keys keep working. The consumer HID page is not replayed, but on the keyboards measured so far it lives on an interface seizure fails on and xkeys skips, so it keeps delivering on its own.
 
 ## 3. Turns a held key into a modifier chord
 
@@ -46,21 +46,24 @@ So xkeys manufactures the flags:
   "swaps": [
     { "from": "LeftCommand", "to": "F20" }
   ],
-  "chord": {
-    "when": "LeftCommand",
-    "hold": ["Command", "Control", "Option", "Shift"],
-    "hide": true
-  }
+  "chords": [
+    {
+      "when": "LeftCommand",
+      "hold": ["Command", "Control", "Option", "Shift"],
+      "hide": true
+    }
+  ]
 }
 ```
 
 Hold Left Command, press `U`, and the app you are in receives `Cmd+Ctrl+Opt+Shift+U` — a chord any shortcut recorder can capture. Tap Left Command on its own and nothing is typed anywhere.
 
-Three details that matter:
+Four details that matter:
 
 - **`when` names the key your finger presses**, not what the swap turns it into. The trigger is read off the keyboard device, which reports the physical key.
 - **The chord runs late**, after a window manager has taken the keystrokes it binds. So a window manager keeps first pick, and nothing fires twice.
-- **No `chord` block means no event tap is created at all.** Swaps alone need no permissions and intercept nothing.
+- **Add as many chords as you like.** Each needs its own trigger; two held at once combine their modifiers.
+- **No `chords` block means no event tap is created at all.** Swaps alone need no permissions and intercept nothing.
 
 ## Why swap to a key that does not exist
 
@@ -80,12 +83,30 @@ This is a fixed table, not a hardware query, and deliberately so: a MacBook's ke
 ## Commands
 
 ```
-xkeys              run as a menu bar agent
-xkeys keys         list swap targets, your live swaps, and the chord
-xkeys watch        name each key as you press it, and what the system received
-xkeys --uninstall  remove this app's swaps (leaving other tools' alone) and exit
+xkeys                run as a menu bar agent
+xkeys keys           your live swaps, your chords, and the safe swap targets
+xkeys watch          name each key as you press it, and what the system received
+xkeys doctor         check everything that decides whether this is working
+xkeys check <file>   validate a config without applying it
+xkeys --uninstall    remove this app's swaps (leaving other tools' alone) and exit
 xkeys --version
 ```
+
+`xkeys doctor` is the first thing to run when something is off. It names what each failure costs you and how to fix it:
+
+```
+  process           running (pid 72273)
+  signature         fern-codesign
+  Accessibility     granted
+  Input Monitoring  granted (keyboard manager opened)
+  config            ~/.config/xkeys/config.json — 2 swaps, 1 chord
+  swaps live        2 of 2 declared
+  chords            LeftCommand held  ->  Cmd+Ctrl+Opt+Shift on the next key
+
+  no problems found
+```
+
+`xkeys check` exits non-zero with the problem list, so whatever generates your config can refuse to write a broken one.
 
 `xkeys watch` is the one that saves you looking things up:
 
@@ -127,14 +148,15 @@ Swaps are applied before either permission is checked, so a revoked grant or an 
 
 ```
 just debug-on && just restart && just log    # verbose log at /tmp/xkeys.log
-just status                                  # pid, signature, live swaps, chord, grants
+just status                                  # pid, signature, live swaps, chords, grants
+just test                                    # pure-logic checks: config, key tables, hidutil parsing
 ```
 
 | symptom | cause |
 |---|---|
 | No menu bar icon, process running | Launch from Finder rather than a terminal; a terminal-spawned launch has been seen to stall before the icon is created. |
 | Chord stopped working mid-session | The tap re-enables itself after a system timeout; if not, `just restart`. |
-| Chord changes ignored after editing config | "Reload Config" re-applies swaps only. Restart the app to re-arm the chord. |
+| A chord fires in no app | Accessibility is missing; `xkeys doctor` says so. |
 | Keys doubled on an external keyboard | Two tools are replaying the same device. |
 | A swap is live that you never declared | Another tool writes the same driver list. `xkeys keys` marks those `(not in your config)`. |
 

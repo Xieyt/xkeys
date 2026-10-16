@@ -11,7 +11,7 @@ import Foundation
 /// The list does not survive a reboot, which is why `apply` runs at launch and
 /// again whenever a keyboard connects.
 enum HIDMapping {
-    private struct Entry: Equatable {
+    struct Entry: Equatable {
         let src: UInt64
         let dst: UInt64
     }
@@ -64,9 +64,16 @@ enum HIDMapping {
 
     private static func read() -> [Entry] {
         guard let text = run(["property", "--get", "UserKeyMapping"]) else { return [] }
+        return entries(fromPropertyList: text)
+    }
 
-        // hidutil prints an old-style (OpenStep) property list, not JSON, and
-        // every value comes back as a string in that format.
+    /// Split out from the `hidutil` call so the parsing can be exercised
+    /// without touching the driver.
+    ///
+    /// hidutil prints an old-style (OpenStep) property list, not JSON, and
+    /// every value comes back as a string in that format — so both NSNumber
+    /// and String have to be accepted.
+    static func entries(fromPropertyList text: String) -> [Entry] {
         guard let parsed = try? PropertyListSerialization.propertyList(
             from: Data(text.utf8), options: [], format: nil
         ) as? [[String: Any]] else {

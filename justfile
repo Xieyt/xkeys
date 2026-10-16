@@ -22,6 +22,27 @@ default:
 build:
     {{swift}} build -c release
 
+# run the pure-logic regression checks
+#
+# Not `swift test`: this machine has Command Line Tools and no Xcode, which
+# ships neither XCTest nor swift-testing, so a test target cannot run at all
+# here. The checks are compiled together with the sources they cover, which
+# needs nothing installed.
+test:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    out=$(mktemp -d)/checks
+    env -u SDKROOT -u DEVELOPER_DIR /usr/bin/xcrun --sdk macosx swiftc -O \
+      Sources/xkeys/Config.swift \
+      Sources/xkeys/KeyNames.swift \
+      Sources/xkeys/HIDKeyTable.swift \
+      Sources/xkeys/HIDMapping.swift \
+      Sources/xkeys/Log.swift \
+      Sources/xkeys/Constants.swift \
+      Checks/main.swift \
+      -o "$out"
+    "$out"
+
 # build, swap the binary into the installed bundle, re-sign, relaunch
 dev-install: build
     #!/usr/bin/env bash
@@ -32,7 +53,7 @@ dev-install: build
     pkill -x xkeys 2>/dev/null || true
     sleep 1
     cp .build/release/xkeys "{{app}}/Contents/MacOS/xkeys"
-    just _sign
+    just signing_cert="{{signing_cert}}" _sign
     open "{{app}}"
     sleep 2
     just status
@@ -51,7 +72,7 @@ install: build
     rm -rf "{{app}}"
     cp -R "$stage" "{{app}}"
     rm -rf "$(dirname "$stage")"
-    just _sign
+    just signing_cert="{{signing_cert}}" _sign
     open "{{app}}"
     sleep 2
     just status
@@ -88,9 +109,9 @@ status:
     codesign -dvvv "{{app}}" 2>&1 | grep -E "^Authority=" || echo "ad-hoc/unsigned"
     echo "swaps:"
     "{{app}}/Contents/MacOS/xkeys" keys 2>/dev/null | sed -n '2,/^$/p' || echo "  (app not installed)"
-    echo "chord:"
+    echo "chords:"
     "{{app}}/Contents/MacOS/xkeys" keys 2>/dev/null \
-      | sed -n '/^Chord for other apps/,/^$/p' | sed -n '2,$p' | sed '/^$/d' \
+      | sed -n '/^Chords for other apps/,/^$/p' | sed -n '2,$p' | sed '/^$/d' \
       || echo "  (app not installed)"
     echo "TCC grants:"
     sqlite3 "/Library/Application Support/com.apple.TCC/TCC.db" \

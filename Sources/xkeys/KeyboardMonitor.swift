@@ -12,8 +12,17 @@ import IOKit.hid
 /// capture context. It runs on the main run loop, so no locking is needed.
 nonisolated(unsafe) var activeSwaps: [UInt32: UInt32] = [:]
 
-/// Current modifier flags from seized external keyboards.
-nonisolated(unsafe) private var currentModifierFlags: UInt64 = 0
+/// Held modifiers, per seized keyboard.
+///
+/// Per device, not global: two external keyboards each track their own
+/// Shift. A single shared value let a modifier held on one keyboard colour
+/// keys typed on another, and let unplugging either keyboard clear a
+/// modifier the other one was still holding.
+nonisolated(unsafe) private var modifierFlagsByDevice: [UnsafeMutableRawPointer: UInt64] = [:]
+
+private func deviceKey(_ device: IOHIDDevice) -> UnsafeMutableRawPointer {
+    Unmanaged.passUnretained(device).toOpaque()
+}
 
 /// Connected keyboard info for menu display.
 struct KeyboardInfo {
@@ -133,7 +142,7 @@ private func deviceConnectedCallback(
         // input. It exists so the chord can tell when the trigger key is
         // down: the window manager deletes that keystroke before any event
         // tap sees it, and the device is the one place still holding it.
-        if chordTriggerUsage != nil {
+        if !chordTriggerUsages.isEmpty {
             IOHIDDeviceRegisterInputValueCallback(device, passiveInputCallback, nil)
         }
         Log.info("deviceConnected: built-in keyboard (\(name)) - driver swap only")
@@ -167,7 +176,9 @@ private func deviceRemovedCallback(
     Log.info("deviceRemoved: \(name)")
     KeyboardMonitor.connectedDevices.removeAll { $0.name == name }
     KeyboardMonitor.onDevicesChanged?()
-    currentModifierFlags = 0
+    // Only this keyboard's modifiers are gone. Clearing every device's would
+    // drop a modifier still held on a keyboard that never left.
+    modifierFlagsByDevice.removeValue(forKey: deviceKey(device))
 }
 
 // MARK: - HID Input Callback
@@ -182,6 +193,7 @@ private func hidInputCallback(
     let usagePage = IOHIDElementGetUsagePage(element)
     var usage = IOHIDElementGetUsage(element)
     let pressed = IOHIDValueGetIntegerValue(value) != 0
+    let key = deviceKey(IOHIDElementGetDevice(element))
 
     // Only handle Keyboard/Keypad page (0x07)
     guard usagePage == 0x07 else { return }
@@ -189,10 +201,14 @@ private func hidInputCallback(
     guard usage >= 0x04, usage <= 0xE7 else { return }
 
     // Trigger state is read before the swap, from the key the hardware
-    // actually reports, so an external keyboard drives the chord the same
-    // way the built-in one does.
-    if usage == chordTriggerUsage {
-        chordTriggerHeld = pressed
+    // actually reports, so an external keyboard drives a chord the same way
+    // the built-in one does.
+    if chordTriggerUsages.contains(usage) {
+        if pressed {
+            chordHeldTriggers.insert(usage)
+        } else {
+            chordHeldTriggers.remove(usage)
+        }
     }
 
     // Seizure reads the device below the layer that performs the driver swap,
@@ -204,54 +220,60 @@ private func hidInputCallback(
 
     // Modifier keys (0xE0-0xE7)
     if let flag = HIDKeyTable.modifierFlag(forUsage: usage) {
+        var flags = modifierFlagsByDevice[key] ?? 0
         if pressed {
-            currentModifierFlags |= flag.rawValue
+            flags |= flag.rawValue
         } else {
-            currentModifierFlags &= ~flag.rawValue
+            flags &= ~flag.rawValue
         }
+        modifierFlagsByDevice[key] = flags
         if let keyCode = HIDKeyTable.virtualKeyCode(forUsage: usage) {
-            injectFlagsChanged(keyCode: keyCode)
+            injectFlagsChanged(keyCode: keyCode, flags: flags)
         }
         return
     }
 
     if let keyCode = HIDKeyTable.virtualKeyCode(forUsage: usage) {
-        injectKey(keyCode: keyCode, keyDown: pressed)
+        injectKey(keyCode: keyCode, keyDown: pressed, flags: modifierFlagsByDevice[key] ?? 0)
     }
 }
 
-/// Reads an un-seized keyboard for one thing only: whether the chord's
-/// trigger key is down. Injects nothing.
+/// Reads an un-seized keyboard for one thing only: whether a chord trigger
+/// is down. Injects nothing.
 private func passiveInputCallback(
     _ context: UnsafeMutableRawPointer?,
     _ result: IOReturn,
     _ sender: UnsafeMutableRawPointer?,
     _ value: IOHIDValue
 ) {
-    guard let trigger = chordTriggerUsage else { return }
     let element = IOHIDValueGetElement(value)
     guard IOHIDElementGetUsagePage(element) == 0x07 else { return }
-    guard IOHIDElementGetUsage(element) == trigger else { return }
-    chordTriggerHeld = IOHIDValueGetIntegerValue(value) != 0
+    let usage = IOHIDElementGetUsage(element)
+    guard chordTriggerUsages.contains(usage) else { return }
+    if IOHIDValueGetIntegerValue(value) != 0 {
+        chordHeldTriggers.insert(usage)
+    } else {
+        chordHeldTriggers.remove(usage)
+    }
 }
 
 // MARK: - CGEvent Injection
 
-private func injectKey(keyCode: UInt16, keyDown: Bool) {
+private func injectKey(keyCode: UInt16, keyDown: Bool, flags: UInt64) {
     let src = CGEventSource(stateID: .hidSystemState)
     guard let event = CGEvent(keyboardEventSource: src, virtualKey: keyCode, keyDown: keyDown) else { return }
 
-    event.flags = CGEventFlags(rawValue: currentModifierFlags)
+    event.flags = CGEventFlags(rawValue: flags)
     event.setIntegerValueField(Constants.injectedEventField, value: Constants.injectedEventMarker)
     event.post(tap: .cghidEventTap)
 }
 
-private func injectFlagsChanged(keyCode: UInt16) {
+private func injectFlagsChanged(keyCode: UInt16, flags: UInt64) {
     let src = CGEventSource(stateID: .hidSystemState)
     guard let event = CGEvent(keyboardEventSource: src, virtualKey: keyCode, keyDown: true) else { return }
     event.type = .flagsChanged
 
-    event.flags = CGEventFlags(rawValue: currentModifierFlags)
+    event.flags = CGEventFlags(rawValue: flags)
     event.setIntegerValueField(Constants.injectedEventField, value: Constants.injectedEventMarker)
     event.post(tap: .cghidEventTap)
 }

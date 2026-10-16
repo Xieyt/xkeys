@@ -25,6 +25,15 @@ struct XKeysApp {
         case "keys":
             Commands.keys()
             return
+        case "doctor":
+            Commands.doctor()
+            return
+        case "check":
+            guard arguments.count == 2 else {
+                fputs("xkeys: usage: xkeys check <config.json>\n", stderr)
+                exit(2)
+            }
+            Commands.check(path: arguments[1])
         case "watch":
             Commands.watch()
         case "--uninstall":
@@ -87,12 +96,10 @@ struct XKeysApp {
         // watch. Nothing above this line depends on it.
         Accessibility.ensureAccessibility()
 
-        // 5. Arm the chord before the keyboard watch: the watch registers the
-        // passive trigger reader only when a chord is configured, so the
-        // trigger usage has to be set first.
-        if let chord = config.chord {
-            ChordTap.start(chord, swaps: config.swaps)
-        }
+        // 5. Arm the chords before the keyboard watch: the watch registers
+        // the passive trigger reader only when at least one trigger exists,
+        // so the trigger set has to be populated first.
+        ChordTap.start(config.chords, swaps: config.swaps)
 
         // 6. Watch for keyboards: re-apply swaps on connect, and make external
         // keyboards visible to everything else.
@@ -135,10 +142,12 @@ struct XKeysApp {
         xkeys \(Constants.displayVersion) — keeps your key swaps applied
 
         usage:
-          xkeys              run as a menu bar agent
-          xkeys keys         list swap targets no Apple keyboard has ever had
-          xkeys watch        name each key as you press it
-          xkeys --uninstall  remove this app's swaps and exit
+          xkeys                 run as a menu bar agent
+          xkeys keys            list your swaps, chords, and safe swap targets
+          xkeys watch           name each key as you press it
+          xkeys doctor          check everything that decides whether this works
+          xkeys check <file>    validate a config without applying it
+          xkeys --uninstall     remove this app's swaps and exit
           xkeys --version
 
         config: \(Config.path)
@@ -314,21 +323,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         if let submenu = chordMenuItem.submenu {
             submenu.removeAllItems()
+            let chords = ChordTap.active
             var lines: [String] = []
-            if let chord = ChordTap.active {
-                chordMenuItem.title = "Chord  \(KeyNames.name(for: chord.when)) → \(chord.holdNames.joined(separator: "+"))"
-                if ChordTap.tapFailed {
-                    lines.append("Needs Accessibility permission")
-                } else {
-                    lines.append(chord.description)
-                    if chord.hide {
-                        lines.append("\(KeyNames.name(for: chord.when)) itself hidden from apps")
-                    }
-                    lines.append("applied after the window manager has taken its bindings")
-                }
+            if chords.isEmpty {
+                chordMenuItem.title = "Chords"
+                lines.append("No chords configured")
+            } else if ChordTap.tapFailed {
+                chordMenuItem.title = "Chords"
+                lines.append("Needs Accessibility permission")
             } else {
-                chordMenuItem.title = "Chord"
-                lines.append("No chord configured")
+                chordMenuItem.title = chords.count == 1
+                    ? "Chords  \(KeyNames.name(for: chords[0].when)) → \(chords[0].holdDescription)"
+                    : "Chords  \(chords.count) configured"
+                for chord in chords {
+                    lines.append(chord.description + (chord.hide ? "   (trigger hidden)" : ""))
+                }
+                lines.append("applied after the window manager has taken its bindings")
             }
             for line in lines {
                 let item = NSMenuItem(title: line, action: nil, keyEquivalent: "")
@@ -386,10 +396,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
-    /// Re-read the config and move the driver to match it.
+    /// Re-read the config and move the driver, and the chords, to match it.
     ///
     /// Swaps that were dropped from the file are taken back out, otherwise
-    /// they would linger until reboot with nothing declaring them.
+    /// they would linger until reboot with nothing declaring them. The
+    /// chords are re-armed from scratch for the same reason: a trigger
+    /// removed from the file must stop being a trigger without a restart.
     @objc private func reloadConfig(_ sender: NSMenuItem) {
         let previous = ownedSwaps
         let (config, problems) = Config.load()
@@ -403,11 +415,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         activeSwaps = Dictionary(uniqueKeysWithValues: config.swaps.map { ($0.from, $0.to) })
         HIDMapping.apply(config.swaps)
 
+        ChordTap.start(config.chords, swaps: config.swaps)
+
         for problem in problems { Log.info("xkeys: config: \(problem)") }
         warningMenuItem.isHidden = problems.isEmpty
         if let first = problems.first { warningMenuItem.title = "Config: \(first)" }
 
-        Log.info("xkeys: reloaded \(config.swaps.count) swap(s), removed \(dropped.count)")
+        Log.info("xkeys: reloaded \(config.swaps.count) swap(s), removed \(dropped.count), "
+            + "armed \(config.chords.count) chord(s)")
         refreshMenuState()
     }
 
