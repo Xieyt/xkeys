@@ -1,0 +1,44 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Stamp version from tag
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          sed -i '' "s/static let version = \".*\"/static let version = \"$VERSION\"/" Sources/xkeys/Constants.swift
+          plutil -replace CFBundleVersion -string "$VERSION" Info.plist
+          plutil -replace CFBundleShortVersionString -string "$VERSION" Info.plist
+
+      - name: Build universal binary
+        run: |
+          swift build -c release --arch arm64 --arch x86_64
+
+      - name: Create and sign app bundle
+        run: |
+          mkdir -p xkeys.app/Contents/MacOS xkeys.app/Contents/Resources
+          cp .build/apple/Products/Release/xkeys xkeys.app/Contents/MacOS/
+          cp Info.plist xkeys.app/Contents/
+          cp AppIcon.icns xkeys.app/Contents/Resources/
+          codesign -f -s - --identifier com.xieyt.xkeys xkeys.app
+
+      - name: Zip app bundle
+        run: |
+          ditto -c -k --keepParent xkeys.app xkeys.zip
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: xkeys.zip
+          generate_release_notes: true
