@@ -67,14 +67,14 @@ Then write `~/.config/xkeys/config.json` and run `just restart`.
 
 ### Nix
 
-The flake ships a dev shell and two modules. It ships no package: nixpkgs has Swift 5.10 on darwin and xkeys needs Swift 6, so nothing in nixpkgs can compile it. Install the app itself once with `just install`; the modules own everything that repeats.
+A `darwin-rebuild switch` builds xkeys, installs it to `/Applications` and signs it with your identity. Nothing to clone, nothing to run by hand.
 
 ```nix
 {
   inputs.xkeys.url = "github:Xieyt/xkeys";
 
-  # nix-darwin: creates one stable signing identity, so the Accessibility and
-  # Input Monitoring grants survive every rebuild.
+  # nix-darwin: builds and installs the app, and creates one stable signing
+  # identity so the Accessibility and Input Monitoring grants survive a rebuild.
   darwinModules = [ xkeys.darwinModules.xkeys ];
 
   # home-manager: owns ~/.config/xkeys/config.json and the launch agent.
@@ -83,6 +83,8 @@ The flake ships a dev shell and two modules. It ships no package: nixpkgs has Sw
 ```
 
 ```nix
+services.xkeys.enable = true;   # builds, installs and signs the app
+
 programs.xkeys = {
   enable = true;
   swaps = [
@@ -101,7 +103,7 @@ services.xkeys.signingIdentity = "xkeys-codesign";  # default
 
 Key and modifier names are checked while nix evaluates, against the real vocabulary extracted from the source, so a typo fails `darwin-rebuild` instead of quietly disabling one swap. So does swapping the same key twice in the same scope.
 
-`nix develop` gives you `just` and, more usefully, a shell with `SDKROOT` and `DEVELOPER_DIR` cleared. A darwin dev shell normally points those at nixpkgs' Apple SDK, which the system Swift 6 compiler rejects outright.
+`nix develop` gives you the same Swift the package is built with, so `just dev-install` compiles incrementally against the toolchain that produces the real artifact. Without nix, `just install` builds with the Mac's own Command Line Tools instead.
 
 ## Configure
 
