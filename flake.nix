@@ -21,26 +21,20 @@
       let
         pkgs = import nixpkgs { inherit system; };
       in {
-        # No `packages.default`, deliberately. nixpkgs ships Swift 5.10 on
-        # darwin and xkeys is swift-tools 6.0 using Swift 6 language
-        # features, so there is nothing in nixpkgs that can compile it.
-        # Build with the system toolchain: `just install`.
-        devShells.default = pkgs.mkShell {
-          packages = [ pkgs.just ];
+        # Built with nixpkgs' own Swift 6.2.4 against apple-sdk-26.5, so the
+        # package and the dev shell share one toolchain. An earlier reading
+        # of Swift 5.10 came from a stale channel and was wrong.
+        packages.default = self.packages.${system}.xkeys;
+        packages.xkeys = pkgs.callPackage ./nix/package.nix { };
 
-          # The whole point of this shell. A darwin devShell normally exports
-          # SDKROOT and DEVELOPER_DIR pointing at nixpkgs' Apple SDK, which
-          # the system Swift 6 compiler rejects outright:
-          #   "SDK is built with Apple Swift 5.10 ... select a toolchain
-          #    which matches the SDK"
-          # Clearing them falls back to the Command Line Tools SDK, which
-          # matches, so `swift build` works in here with no env juggling.
+        devShells.default = pkgs.mkShell {
+          packages = [ pkgs.just pkgs.swift pkgs.swiftpm ];
+
+          # `just dev-install` compiles in here, incrementally, with the same
+          # compiler `nix build` uses. Two toolchains producing the shipped
+          # binary is how a bug appears only after a switch.
           shellHook = ''
-            unset SDKROOT DEVELOPER_DIR LIBRARY_PATH
-            echo "xkeys dev shell. Build: just build | Install: just install | Checks: just test"
-            if ! /usr/bin/xcrun --sdk macosx --find swiftc >/dev/null 2>&1; then
-              echo "!! no usable Swift toolchain: xcode-select --install"
-            fi
+            echo "xkeys dev shell. Build: nix build | Fast loop: just dev-install | Checks: just test"
           '';
         };
       });

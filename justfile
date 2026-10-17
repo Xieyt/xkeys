@@ -25,8 +25,12 @@ swift := "env -u SDKROOT -u DEVELOPER_DIR -u LIBRARY_PATH /usr/bin/swift"
 default:
     @just --list
 
-# build the release binary
+# build the app bundle reproducibly (this is what a switch installs)
 build:
+    nix build .#xkeys
+
+# build the binary with the Mac's own toolchain, for people without nix
+build-raw:
     {{swift}} build -c release
 
 # run the pure-logic regression checks
@@ -78,12 +82,22 @@ _gen-nix-keys out:
     "$dir/gen" > "{{out}}"
     rm -rf "$dir"
 
-# build, swap the binary into the installed bundle, re-sign, relaunch
-dev-install: build
+# fast loop: incremental compile, swap the binary in place, re-sign, relaunch
+#
+# Compiles inside the nix dev shell rather than with the Mac's toolchain, so
+# the fast path and `nix build` use the same compiler. Two compilers
+# producing the shipped binary is how a bug appears only after a switch.
+dev-install:
     #!/usr/bin/env bash
     set -euo pipefail
     if [ ! -d "{{app}}" ]; then
-      echo "!! {{app}} not present - run \`just install\` first"; exit 1
+      echo "!! {{app}} not present - install it with a switch, or \`just install\`"; exit 1
+    fi
+    if command -v nix >/dev/null 2>&1; then
+      nix develop -c swift build -c release
+    else
+      echo "note: no nix; building with the system toolchain instead"
+      {{swift}} build -c release
     fi
     pkill -x xkeys 2>/dev/null || true
     sleep 1
@@ -94,7 +108,7 @@ dev-install: build
     just status
 
 # full install: build the .app bundle from scratch, sign, install, launch
-install: build
+install: build-raw
     #!/usr/bin/env bash
     set -euo pipefail
     stage=$(mktemp -d)/xkeys.app

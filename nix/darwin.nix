@@ -1,9 +1,18 @@
-{ config, lib, ... }:
+{ config, lib, pkgs, ... }:
 
 let
   cfg = config.services.xkeys;
 in {
   options.services.xkeys = {
+    enable = lib.mkEnableOption "installing xkeys.app and signing it at activation";
+
+    package = lib.mkOption {
+      type = lib.types.package;
+      default = pkgs.callPackage ./package.nix { };
+      defaultText = lib.literalExpression "pkgs.callPackage ./package.nix { }";
+      description = "The xkeys package whose app bundle is installed.";
+    };
+
     signingIdentity = lib.mkOption {
       type = lib.types.str;
       default = "xkeys-codesign";
@@ -31,10 +40,42 @@ in {
     };
   };
 
-  config = lib.mkIf cfg.manageSigningIdentity {
-    # Root already, so no sudo. The certificate is created once and then
-    # found on every later activation.
-    system.activationScripts.postActivation.text = lib.mkAfter ''
+  config = lib.mkMerge [
+    (lib.mkIf cfg.enable {
+      environment.systemPackages = [ cfg.package ];
+
+      # Installed by hand rather than through nix-darwin's own app handling,
+      # which copies bundles into "/Applications/Nix Apps" and re-signs them.
+      # The permission grants are keyed to the bundle identifier plus the
+      # signing identity, so anything that re-signs behind our back drops
+      # them. Same reasoning as rift's module.
+      system.activationScripts.applications.text = lib.mkAfter ''
+        app_source="${cfg.package}/Applications/xkeys.app"
+        app_target="/Applications/xkeys.app"
+        sign="${cfg.signingIdentity}"
+        keychain=/Library/Keychains/System.keychain
+
+        echo "installing xkeys.app..." >&2
+        # The app may be running and holding its own binary open, so stop it
+        # before the bundle is replaced.
+        /usr/bin/pkill -x xkeys 2>/dev/null || true
+        rm -rf "$app_target"
+        ${pkgs.rsync}/bin/rsync -a "$app_source/" "$app_target/"
+        chmod -R u+w "$app_target"
+
+        if [ "$sign" != "-" ] && ! /usr/bin/security find-certificate -c "$sign" "$keychain" >/dev/null 2>&1; then
+          echo "xkeys: identity '$sign' unavailable; signing ad-hoc (permissions will be re-prompted)." >&2
+          sign="-"
+        fi
+        /usr/bin/codesign --force --sign "$sign" --identifier com.xieyt.xkeys "$app_target"
+        echo "✓ xkeys.app signed with $sign" >&2
+      '';
+    })
+
+    (lib.mkIf cfg.manageSigningIdentity {
+      # Root already, so no sudo. The certificate is created once and then
+      # found on every later activation.
+      system.activationScripts.postActivation.text = lib.mkAfter ''
       sign="${cfg.signingIdentity}"
       keychain=/Library/Keychains/System.keychain
 
@@ -62,6 +103,7 @@ in {
         fi
         rm -rf "$cdir"
       fi
-    '';
-  };
+      '';
+    })
+  ];
 }
