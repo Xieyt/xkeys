@@ -42,6 +42,22 @@ stdenv.mkDerivation (finalAttrs: {
     /usr/bin/plutil -replace CFBundleVersion -string "${finalAttrs.version}" "$app/Contents/Info.plist"
     /usr/bin/plutil -replace CFBundleShortVersionString -string "${finalAttrs.version}" "$app/Contents/Info.plist"
 
+    # Swift links against the OS runtime in /usr/lib/swift - every dylib in
+    # the binary resolves there, none in the store - but SwiftPM still stamps
+    # the build toolchain's library directory in as a search path. Nix scans
+    # outputs for store paths, finds that one string, and concludes the 496 KB
+    # app needs the compiler: swiftc, lldb and the Apple SDK, 2.98 GiB, in
+    # every system closure. The compiler's own default is not to add it.
+    #
+    # Deleting a load command invalidates the signature, so re-sign ad-hoc;
+    # activation re-signs with the machine identity anyway.
+    for rp in $(otool -l "$app/Contents/MacOS/xkeys" |
+                  awk '/LC_RPATH/{f=1} f&&/ path /{print $2; f=0}' |
+                  grep '^/nix/store/'); do
+      install_name_tool -delete_rpath "$rp" "$app/Contents/MacOS/xkeys"
+    done
+    /usr/bin/codesign --force --sign - --identifier com.xieyt.xkeys "$app"
+
     # Reachable on PATH for `xkeys doctor`, `keys`, `check` and `watch`.
     ln -s "$app/Contents/MacOS/xkeys" $out/bin/xkeys
 
